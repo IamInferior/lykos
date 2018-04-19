@@ -4,7 +4,8 @@ from collections import defaultdict
 
 import src.settings as var
 from src.utilities import *
-from src import debuglog, errlog, plog
+from src import users, channels, debuglog, errlog, plog
+from src.functions import get_players, get_all_players, get_main_role
 from src.decorators import cmd, event_listener
 from src.messages import messages
 from src.events import Event
@@ -33,8 +34,7 @@ def vigilante_kill(cli, nick, chan, rest):
     KILLS[nick] = victim
     PASSED.discard(nick)
 
-    msg = messages["wolf_target"].format(orig)
-    pm(cli, nick, messages["player"].format(msg))
+    pm(cli, nick, messages["player_kill"].format(orig))
 
     debuglog("{0} ({1}) KILL: {2} ({3})".format(nick, get_role(nick), victim, get_role(victim)))
 
@@ -62,13 +62,13 @@ def vigilante_pass(cli, nick, chan, rest):
     chk_nightdone(cli)
 
 @event_listener("del_player")
-def on_del_player(evt, cli, var, nick, nickrole, nicktpls, death_triggers):
-    PASSED.discard(nick)
-    if nick in KILLS:
-        del KILLS[nick]
+def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
+    PASSED.discard(user.nick)
+    if user.nick in KILLS:
+        del KILLS[user.nick]
     for h,v in list(KILLS.items()):
-        if v == nick:
-            pm(cli, h, messages["hunter_discard"])
+        if v == user.nick:
+            pm(user.client, h, messages["hunter_discard"])
             del KILLS[h]
 
 @event_listener("rename_player")
@@ -88,52 +88,53 @@ def on_rename(evt, cli, var, prefix, nick):
         PASSED.add(nick)
 
 @event_listener("night_acted")
-def on_acted(evt, cli, var, nick, sender):
-    if nick in KILLS:
+def on_acted(evt, var, user, actor):
+    if user.nick in KILLS:
         evt.data["acted"] = True
 
 @event_listener("get_special")
-def on_get_special(evt, cli, var):
-    evt.data["special"].update(var.ROLES["vigilante"])
+def on_get_special(evt, var):
+    evt.data["special"].update(get_players(("vigilante",)))
 
 @event_listener("transition_day", priority=2)
-def on_transition_day(evt, cli, var):
-    for k, d in list(KILLS.items()):
-        evt.data["victims"].append(d)
-        evt.data["onlybywolves"].discard(d)
-        evt.data["killers"][d].append(k)
+def on_transition_day(evt, var):
+    for k, v in list(KILLS.items()):
+        killer = users._get(k) # FIXME
+        victim = users._get(v) # FIXME
+        evt.data["victims"].append(victim)
+        evt.data["onlybywolves"].discard(victim)
+        evt.data["killers"][victim].append(killer)
         # important, otherwise our del_player listener lets hunter kill again
         del KILLS[k]
 
-        if get_role(d) not in var.WOLF_ROLES | var.WIN_STEALER_ROLES:
-            var.DYING.add(k)
+        if get_main_role(victim) not in var.WOLF_ROLES | var.WIN_STEALER_ROLES:
+            var.DYING.add(killer)
 
 @event_listener("exchange_roles")
-def on_exchange(evt, cli, var, actor, nick, actor_role, nick_role):
-    if actor in KILLS:
-        del KILLS[actor]
-    if nick in KILLS:
-        del KILLS[nick]
-    PASSED.discard(actor)
-    PASSED.discard(nick)
+def on_exchange(evt, var, actor, target, actor_role, target_role):
+    if actor.nick in KILLS:
+        del KILLS[actor.nick]
+    if target.nick in KILLS:
+        del KILLS[target.nick]
+    PASSED.discard(actor.nick)
+    PASSED.discard(target.nick)
 
 @event_listener("chk_nightdone")
-def on_chk_nightdone(evt, cli, var):
+def on_chk_nightdone(evt, var):
     evt.data["actedcount"] += len(KILLS) + len(PASSED)
-    evt.data["nightroles"].extend(get_roles("vigilante"))
+    evt.data["nightroles"].extend(get_all_players(("vigilante",)))
 
 @event_listener("transition_night_end", priority=2)
-def on_transition_night_end(evt, cli, var):
-    ps = list_players()
-    for vigilante in var.ROLES["vigilante"]:
+def on_transition_night_end(evt, var):
+    ps = get_players()
+    for vigilante in get_all_players(("vigilante",)):
         pl = ps[:]
         random.shuffle(pl)
         pl.remove(vigilante)
-        if vigilante in var.PLAYERS and not is_user_simple(vigilante):
-            pm(cli, vigilante, messages["vigilante_notify"])
-        else:
-            pm(cli, vigilante, messages["vigilante_simple"])
-        pm(cli, vigilante, "Players: " + ", ".join(pl))
+        to_send = "vigilante_notify"
+        if vigilante.prefers_simple():
+            to_send = "vigilante_simple"
+        vigilante.send(messages[to_send], "Players: " + ", ".join(p.nick for p in pl), sep="\n")
 
 @event_listener("succubus_visit")
 def on_succubus_visit(evt, cli, var, nick, victim):
@@ -142,7 +143,7 @@ def on_succubus_visit(evt, cli, var, nick, victim):
         del KILLS[victim]
 
 @event_listener("begin_day")
-def on_begin_day(evt, cli, var):
+def on_begin_day(evt, var):
     KILLS.clear()
     PASSED.clear()
 
@@ -152,7 +153,7 @@ def on_reset(evt, var):
     PASSED.clear()
 
 @event_listener("get_role_metadata")
-def on_get_role_metadata(evt, cli, var, kind):
+def on_get_role_metadata(evt, var, kind):
     if kind == "night_kills":
         evt.data["vigilante"] = len(var.ROLES["vigilante"])
 

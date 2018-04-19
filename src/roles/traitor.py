@@ -7,7 +7,7 @@ from collections import defaultdict
 import botconfig
 import src.settings as var
 from src.utilities import *
-from src import debuglog, errlog, plog
+from src import debuglog, errlog, plog, users, channels
 from src.decorators import cmd, event_listener
 from src.messages import messages
 from src.events import Event
@@ -29,23 +29,23 @@ def on_get_final_role(evt, cli, var, nick, role):
         evt.data["role"] = "traitor"
 
 @event_listener("update_stats", priority=1)
-def on_update_stats1(evt, cli, var, nick, nickrole, nickreveal, nicktpls):
-    if nickrole == var.DEFAULT_ROLE and var.HIDDEN_TRAITOR:
+def on_update_stats1(evt, var, player, mainrole, revealroles, allroles):
+    if mainrole == var.DEFAULT_ROLE and var.HIDDEN_TRAITOR:
         evt.data["possible"].add("traitor")
 
 @event_listener("update_stats", priority=3)
-def on_update_stats3(evt, cli, var, nick, nickrole, nickreveal, nicktpls):
+def on_update_stats3(evt, var, player, mainrole, revealroles, allroles):
     # if this is a night death and we know for sure that wolves (and only wolves)
     # killed, then that kill cannot be traitor as long as they're in wolfchat.
     # ismain True = night death, False = chain death; chain deaths can be traitors
     # even if only wolves killed, so we short-circuit there as well
     # TODO: an observant user will be able to determine if traitor dies due to luck/misdirection totem
     # redirecting a wolf kill onto traitor
-    if "traitor" not in evt.data["possible"] or not evt.params.ismain or nickrole == "traitor":
+    if "traitor" not in evt.data["possible"] or not evt.params.ismain or mainrole == "traitor":
         return
     if var.PHASE == "day" and var.GAMEPHASE == "night":
         mevt = Event("get_role_metadata", {})
-        mevt.dispatch(cli, var, "night_kills")
+        mevt.dispatch(var, "night_kills")
         nonwolf = 0
         total = 0
         for role, num in mevt.data.items():
@@ -60,13 +60,14 @@ def on_update_stats3(evt, cli, var, nick, nickrole, nickreveal, nicktpls):
         # and therefore cannot be traitor. However, we currently do not have the logic to deduce this
 
 @event_listener("chk_win", priority=1.1)
-def on_chk_win(evt, cli, var, rolemap, lpl, lwolves, lrealwolves):
+def on_chk_win(evt, cli, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
     did_something = False
     if lrealwolves == 0:
         for traitor in list(rolemap["traitor"]):
             rolemap["wolf"].add(traitor)
             rolemap["traitor"].remove(traitor)
             rolemap["cursed villager"].discard(traitor)
+            mainroles[users._get(traitor)] = "wolf" # FIXME
             did_something = True
             if var.PHASE in var.GAME_PHASES:
                 var.FINAL_ROLES[traitor] = "wolf"

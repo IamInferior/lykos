@@ -215,6 +215,9 @@ ROLE_ALIASES = {
         "drunk": "village drunk",
         "cs": "crazed shaman",
         "potato": "villager",
+        "vg": "vengeful ghost",
+        "mm": "matchmaker",
+        "ms": "mad scientist",
         }
 
 # TODO: move this to a game mode called "fixed" once we implement a way to randomize roles (and have that game mode be called "random")
@@ -331,6 +334,9 @@ DISABLED_ROLES = frozenset()
 # Game modes that cannot be randomly picked or voted for
 DISABLED_GAMEMODES = frozenset()
 
+# Commands listed here cannot be used by anyone (even admins/owners)
+DISABLED_COMMANDS = frozenset()
+
 # Roles which have a command equivalent to the role name need to implement special handling for being
 # passed their command again as a prefix and strip it out. For example, both !clone foo and !clone clone foo
 # should be valid. Failure to add such a command to this set will result in the bot not starting
@@ -338,9 +344,8 @@ DISABLED_GAMEMODES = frozenset()
 ROLE_COMMAND_EXCEPTIONS = set()
 
 GIF_CHANCE = 1/50
-FORTUNE_CHANCE = 1/25
 
-ALL_FLAGS = frozenset("AaDdFjms")
+ALL_FLAGS = frozenset("AaDdFgjmNSsw")
 
 GRAVEYARD_LOCK = threading.RLock()
 WARNING_LOCK = threading.RLock()

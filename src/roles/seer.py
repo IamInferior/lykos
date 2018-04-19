@@ -3,13 +3,15 @@ import random
 
 import src.settings as var
 from src.utilities import *
-from src import debuglog, errlog, plog
+from src import users, channels, debuglog, errlog, plog
 from src.decorators import cmd, event_listener
+from src.functions import get_players, get_all_players, get_main_role
 from src.messages import messages
 from src.events import Event
 
 SEEN = set()
 
+# FIXME: this needs to be split into seer.py, oracle.py, and augur.py
 @cmd("see", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("seer", "oracle", "augur"))
 def see(cli, nick, chan, rest):
     """Use your paranormal powers to determine the role or alignment of a player."""
@@ -80,34 +82,34 @@ def on_rename(evt, cli, var, prefix, nick):
         SEEN.add(nick)
 
 @event_listener("del_player")
-def on_del_player(evt, cli, var, nick, nickrole, nicktpls, death_triggers):
-    SEEN.discard(nick)
+def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
+    SEEN.discard(user.nick)
 
 @event_listener("night_acted")
-def on_acted(evt, cli, var, nick, sender):
-    if nick in SEEN:
+def on_acted(evt, var, user, actor):
+    if user.nick in SEEN:
         evt.data["acted"] = True
 
 @event_listener("get_special")
-def on_get_special(evt, cli, var):
-    evt.data["special"].update(list_players(("seer", "oracle", "augur")))
+def on_get_special(evt, var):
+    evt.data["special"].update(get_players(("seer", "oracle", "augur")))
 
 @event_listener("exchange_roles")
-def on_exchange(evt, cli, var, actor, nick, actor_role, nick_role):
+def on_exchange(evt, var, actor, target, actor_role, target_role):
     if actor_role in ("seer", "oracle", "augur"):
-        SEEN.discard(actor)
+        SEEN.discard(actor.nick)
 
 @event_listener("chk_nightdone")
-def on_chk_nightdone(evt, cli, var):
+def on_chk_nightdone(evt, var):
     evt.data["actedcount"] += len(SEEN)
-    evt.data["nightroles"].extend(get_roles("seer", "oracle", "augur"))
+    evt.data["nightroles"].extend(get_all_players(("seer", "oracle", "augur")))
 
 @event_listener("transition_night_end", priority=2)
-def on_transition_night_end(evt, cli, var):
-    for seer in list_players(("seer", "oracle", "augur")):
-        pl = list_players()
+def on_transition_night_end(evt, var):
+    for seer in get_players(("seer", "oracle", "augur")):
+        pl = get_players()
         random.shuffle(pl)
-        role = get_role(seer)
+        role = get_main_role(seer)
         pl.remove(seer)  # remove self from list
 
         a = "a"
@@ -123,15 +125,13 @@ def on_transition_night_end(evt, cli, var):
         else:
             what = messages["seer_role_bug"]
 
-        if seer in var.PLAYERS and not is_user_simple(seer):
-            pm(cli, seer, messages["seer_role_info"].format(a, role, what))
-        else:
-            pm(cli, seer, messages["seer_simple"].format(a, role))  # !simple
-        pm(cli, seer, "Players: " + ", ".join(pl))
-
+        to_send = "seer_role_info"
+        if seer.prefers_simple():
+            to_send = "seer_simple"
+        seer.send(messages[to_send].format(a, role, what), "Players: " + ", ".join(p.nick for p in pl), sep="\n")
 
 @event_listener("begin_day")
-def on_begin_day(evt, cli, var):
+def on_begin_day(evt, var):
     SEEN.clear()
 
 @event_listener("reset")

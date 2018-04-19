@@ -8,6 +8,7 @@ import botconfig
 import src.settings as var
 from src.utilities import *
 from src import channels, users, debuglog, errlog, plog
+from src.functions import get_players, get_all_players, get_main_role
 from src.decorators import cmd, event_listener
 from src.messages import messages
 from src.events import Event
@@ -58,16 +59,18 @@ def pass_cmd(cli, nick, chan, rest):
     chk_nightdone(cli)
 
 @event_listener("bite")
-def on_bite(evt, cli, var, alpha, target):
-    if target not in var.ROLES["harlot"]:
+def on_bite(evt, var, alpha, target):
+    if target.nick not in var.ROLES["harlot"] or target.nick not in VISITED:
         return
-    hvisit = VISITED.get(target)
-    if hvisit and get_role(hvisit) not in var.WOLFCHAT_ROLES and (hvisit not in evt.param.bywolves or hvisit in evt.param.protected):
-        evt.data["can_bite"] = False
+    hvisit = VISITED[target.nick]
+    if hvisit is not None:
+        visited = users._get(hvisit) # FIXME
+        if get_main_role(visited) not in var.WOLFCHAT_ROLES and (visited not in evt.params.bywolves or visited in evt.params.protected):
+            evt.data["can_bite"] = False
 
 @event_listener("transition_day_resolve", priority=1)
-def on_transition_day_resolve(evt, cli, var, victim):
-    if victim in var.ROLES["harlot"] and VISITED.get(victim) and victim not in evt.data["dead"] and victim in evt.data["onlybywolves"]:
+def on_transition_day_resolve(evt, var, victim):
+    if victim.nick in var.ROLES["harlot"] and VISITED.get(victim.nick) and victim not in evt.data["dead"] and victim in evt.data["onlybywolves"]:
         if victim not in evt.data["bitten"]:
             evt.data["message"].append(messages["target_not_home"])
             evt.data["novictmsg"] = False
@@ -75,77 +78,78 @@ def on_transition_day_resolve(evt, cli, var, victim):
         evt.prevent_default = True
 
 @event_listener("transition_day_resolve_end", priority=1)
-def on_transition_day_resolve_end(evt, cli, var, victims):
+def on_transition_day_resolve_end(evt, var, victims):
     for victim in victims + evt.data["bitten"]:
-        if victim in evt.data["dead"] and victim in VISITED.values() and (victim in evt.data["bywolves"] or victim in evt.data["bitten"]):
+        if victim in evt.data["dead"] and victim.nick in VISITED.values() and (victim in evt.data["bywolves"] or victim in evt.data["bitten"]):
             for hlt in VISITED:
-                if VISITED[hlt] == victim and hlt not in evt.data["bitten"] and hlt not in evt.data["dead"]:
+                user = users._get(hlt) # FIXME
+                if VISITED[hlt] == victim.nick and user not in evt.data["bitten"] and user not in evt.data["dead"]:
                     if var.ROLE_REVEAL in ("on", "team"):
                         evt.data["message"].append(messages["visited_victim"].format(hlt, get_reveal_role(hlt)))
                     else:
                         evt.data["message"].append(messages["visited_victim_noreveal"].format(hlt))
-                    evt.data["bywolves"].add(hlt)
-                    evt.data["onlybywolves"].add(hlt)
-                    evt.data["dead"].append(hlt)
+                    evt.data["bywolves"].add(user)
+                    evt.data["onlybywolves"].add(user)
+                    evt.data["dead"].append(user)
 
 @event_listener("transition_day_resolve_end", priority=3)
-def on_transition_day_resolve_end3(evt, cli, var, victims):
-    for harlot in var.ROLES["harlot"]:
-        if VISITED.get(harlot) in list_players(var.WOLF_ROLES) and harlot not in evt.data["dead"] and harlot not in evt.data["bitten"]:
+def on_transition_day_resolve_end3(evt, var, victims):
+    for harlot in get_all_players(("harlot",)):
+        if VISITED.get(harlot.nick) in list_players(var.WOLF_ROLES) and harlot not in evt.data["dead"] and harlot not in evt.data["bitten"]:
             evt.data["message"].append(messages["harlot_visited_wolf"].format(harlot))
             evt.data["bywolves"].add(harlot)
             evt.data["onlybywolves"].add(harlot)
             evt.data["dead"].append(harlot)
 
 @event_listener("night_acted")
-def on_night_acted(evt, cli, var, nick, sender):
-    if VISITED.get(nick):
+def on_night_acted(evt, var, user, actor):
+    if VISITED.get(user.nick):
         evt.data["acted"] = True
 
 @event_listener("chk_nightdone")
-def on_chk_nightdone(evt, cli, var):
+def on_chk_nightdone(evt, var):
     evt.data["actedcount"] += len(VISITED)
-    evt.data["nightroles"].extend(var.ROLES["harlot"])
+    evt.data["nightroles"].extend(get_all_players(("harlot",)))
 
 @event_listener("exchange_roles")
-def on_exchange_roles(evt, cli, var, actor, nick, actor_role, nick_role):
+def on_exchange_roles(evt, var, actor, target, actor_role, target_role):
     if actor_role == "harlot":
-        if actor in VISITED:
-            if VISITED[actor] is not None:
-                pm(cli, VISITED[actor], messages["harlot_disappeared"].format(actor))
-            del VISITED[actor]
-    if nick_role == "harlot":
-        if nick in VISITED:
-            if VISITED[nick] is not None:
-                pm(cli, VISITED[nick], messages["harlot_disappeared"].format(nick))
-            del VISITED[nick]
+        if actor.nick in VISITED:
+            if VISITED[actor.nick] is not None:
+                visited = users._get(VISITED[actor.nick]) # FIXME
+                visited.send(messages["harlot_disappeared"].format(actor))
+            del VISITED[actor.nick]
+    if target_role == "harlot":
+        if target.nick in VISITED:
+            if VISITED[target.nick] is not None:
+                visited = users._get(VISITED[target.nick]) # FIXME
+                visited.send(messages["harlot_disappeared"].format(target))
+            del VISITED[target.nick]
 
 @event_listener("transition_night_end", priority=2)
-def on_transition_night_end(evt, cli, var):
-    for harlot in var.ROLES["harlot"]:
-        pl = list_players()
+def on_transition_night_end(evt, var):
+    for harlot in get_all_players(("harlot",)):
+        pl = get_players()
         random.shuffle(pl)
         pl.remove(harlot)
-        if harlot in var.PLAYERS and not is_user_simple(harlot):
-            pm(cli, harlot, messages["harlot_info"])
-        else:
-            pm(cli, harlot, messages["harlot_simple"])
-        pm(cli, harlot, "Players: " + ", ".join(pl))
+        to_send = "harlot_info"
+        if harlot.prefers_simple():
+            to_send = "harlot_simple"
+        harlot.send(messages[to_send], "Players: " + ", ".join(p.nick for p in pl), sep="\n")
 
 @event_listener("begin_day")
-def on_begin_day(evt, cli, var):
+def on_begin_day(evt, var):
     VISITED.clear()
 
 @event_listener("get_special")
-def on_get_special(evt, cli, var):
-    evt.data["special"].update(var.ROLES["harlot"])
+def on_get_special(evt, var):
+    evt.data["special"].update(get_players(("harlot",)))
 
 @event_listener("del_player")
-def on_del_player(evt, cli, var, nick, nickrole, nicktpls, death_triggers):
-    if nickrole != "harlot":
+def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
+    if "harlot" not in allroles:
         return
-    if nick in VISITED:
-        del VISITED[nick]
+    VISITED.pop(user.nick, None)
 
 @event_listener("rename_player")
 def on_rename(evt, cli, var, prefix, nick):

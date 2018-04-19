@@ -3,7 +3,8 @@ import random
 
 import src.settings as var
 from src.utilities import *
-from src import debuglog, errlog, plog
+from src import users, channels, debuglog, errlog, plog
+from src.functions import get_players, get_all_players
 from src.decorators import cmd, event_listener
 from src.messages import messages
 from src.events import Event
@@ -69,28 +70,28 @@ def on_rename(evt, cli, var, prefix, nick):
             del dictvar[prefix]
 
 @event_listener("night_acted")
-def on_acted(evt, cli, var, nick, sender):
-    if nick in SEEN:
+def on_acted(evt, var, user, actor):
+    if user.nick in SEEN:
         evt.data["acted"] = True
 
 @event_listener("exchange_roles")
-def on_exchange(evt, cli, var, actor, nick, actor_role, nick_role):
-    if actor_role == "doomsayer" and nick_role != "doomsayer":
-        SEEN.discard(actor)
+def on_exchange(evt, var, actor, target, actor_role, target_role):
+    if actor_role == "doomsayer" and target_role != "doomsayer":
+        SEEN.discard(actor.nick)
         for name, mapping in _mappings:
-            mapping.pop(actor, None)
+            mapping.pop(actor.nick, None)
 
-    elif nick_role == "doomsayer" and actor_role != "doomsayer":
-        SEEN.discard(nick)
+    elif target_role == "doomsayer" and actor_role != "doomsayer":
+        SEEN.discard(target.nick)
         for name, mapping in _mappings:
-            mapping.pop(nick, None)
+            mapping.pop(target.nick, None)
 
 @event_listener("del_player")
-def on_del_player(evt, cli, var, nick, nickrole, nicktpls, death_triggers):
-    SEEN.discard(nick)
+def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
+    SEEN.discard(user.nick)
     for name, dictvar in _mappings:
         for k, v in list(dictvar.items()):
-            if nick == k or nick == v:
+            if user.nick in (k, v):
                 del dictvar[k]
 
 @event_listener("doctor_immunize")
@@ -102,13 +103,13 @@ def on_doctor_immunize(evt, cli, var, doctor, target):
         evt.data["message"] = "not_sick"
 
 @event_listener("get_special")
-def on_get_special(evt, cli, var):
-    evt.data["special"].update(var.ROLES["doomsayer"])
+def on_get_special(evt, var):
+    evt.data["special"].update(get_players(("doomsayer",)))
 
 @event_listener("chk_nightdone")
-def on_chk_nightdone(evt, cli, var):
+def on_chk_nightdone(evt, var):
     evt.data["actedcount"] += len(SEEN)
-    evt.data["nightroles"].extend(get_roles("doomsayer"))
+    evt.data["nightroles"].extend(get_all_players(("doomsayer",)))
 
 @event_listener("abstain")
 def on_abstain(evt, cli, var, nick):
@@ -123,27 +124,32 @@ def on_lynch(evt, cli, var, nick):
         evt.prevent_default = True
 
 @event_listener("get_voters")
-def on_get_voters(evt, cli, var):
+def on_get_voters(evt, var):
     evt.data["voters"].difference_update(SICK.values())
 
 @event_listener("transition_day_begin")
-def on_transition_day_begin(evt, cli, var):
+def on_transition_day_begin(evt, var):
     for victim in SICK.values():
-        pm(cli, victim, messages["player_sick"])
+        user = users._get(victim)
+        user.queue_message(messages["player_sick"])
+    if SICK:
+        user.send_messages()
 
 @event_listener("transition_day", priority=2)
-def on_transition_day(evt, cli, var):
-    for k, d in list(KILLS.items()):
-        evt.data["victims"].append(d)
+def on_transition_day(evt, var):
+    for k, v in list(KILLS.items()):
+        killer = users._get(k) # FIXME
+        victim = users._get(v) # FIXME
+        evt.data["victims"].append(victim)
         # even though doomsayer is a wolf, remove from onlybywolves since
         # that particular item indicates that they were the target of a wolf !kill.
         # If doomsayer doesn't remove this, roles such as harlot or monster will not
         # die if they are the target of a doomsayer !see that ends up killing the target.
-        evt.data["onlybywolves"].discard(d)
-        evt.data["killers"][d].append(k)
+        evt.data["onlybywolves"].discard(victim)
+        evt.data["killers"][victim].append(killer)
 
 @event_listener("begin_day")
-def on_begin_day(evt, cli, var):
+def on_begin_day(evt, var):
     var.DISEASED.update(SICK.values())
     var.SILENCED.update(SICK.values())
     var.LYCANTHROPES.update(LYCANS.values())

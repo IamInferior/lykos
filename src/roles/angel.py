@@ -7,7 +7,8 @@ from collections import defaultdict
 import botconfig
 import src.settings as var
 from src.utilities import *
-from src import debuglog, errlog, plog
+from src import users, channels, debuglog, errlog, plog
+from src.functions import get_players, get_all_players
 from src.decorators import cmd, event_listener
 from src.messages import messages
 from src.events import Event
@@ -79,81 +80,82 @@ def on_rename(evt, cli, var, prefix, nick):
         PASSED.add(nick)
 
 @event_listener("del_player")
-def on_del_player(evt, cli, var, nick, nickrole, nicktpls, death_triggers):
-    if var.PHASE == "night" and nick in GUARDED:
-        pm(cli, GUARDED[nick], messages["protector_disappeared"])
+def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
+    if var.PHASE == "night" and user.nick in GUARDED:
+        pm(user.client, GUARDED[user.nick], messages["protector_disappeared"])
     for dictvar in (GUARDED, LASTGUARDED):
         for k,v in list(dictvar.items()):
-            if nick in (k, v):
+            if user.nick in (k, v):
                 del dictvar[k]
-    if nick in PASSED:
-        PASSED.discard(nick)
+    PASSED.discard(user.nick)
 
 @event_listener("night_acted")
-def on_acted(evt, cli, var, nick, sender):
-    if nick in GUARDED:
+def on_acted(evt, var, user, actor):
+    if user.nick in GUARDED:
         evt.data["acted"] = True
 
 @event_listener("get_special")
-def on_get_special(evt, cli, var):
-    evt.data["special"].update(list_players(("guardian angel", "bodyguard")))
+def on_get_special(evt, var):
+    evt.data["special"].update(get_players(("guardian angel", "bodyguard")))
 
 @event_listener("exchange_roles")
-def on_exchange(evt, cli, var, actor, nick, actor_role, nick_role):
+def on_exchange(evt, var, actor, target, actor_role, target_role):
     if actor_role in ("bodyguard", "guardian angel"):
-        if actor in GUARDED:
-            pm(cli, GUARDED.pop(actor), messages["protector disappeared"])
-        if actor in LASTGUARDED:
-            del LASTGUARDED[actor]
-    if nick_role in ("bodyguard", "guardian angel"):
-        if nick in GUARDED:
-            pm(cli, GUARDED.pop(nick), messages["protector disappeared"])
-        if nick in LASTGUARDED:
-            del LASTGUARDED[nick]
+        if actor.nick in GUARDED:
+            guarded = users._get(GUARDED.pop(actor.nick)) # FIXME
+            guarded.send(messages["protector disappeared"])
+        if actor.nick in LASTGUARDED:
+            del LASTGUARDED[actor.nick]
+    if target_role in ("bodyguard", "guardian angel"):
+        if target.nick in GUARDED:
+            guarded = users._get(GUARDED.pop(target.nick)) # FIXME
+            guarded.send(messages["protector disappeared"])
+        if target.nick in LASTGUARDED:
+            del LASTGUARDED[target.nick]
 
 @event_listener("chk_nightdone")
-def on_chk_nightdone(evt, cli, var):
+def on_chk_nightdone(evt, var):
     evt.data["actedcount"] += len(GUARDED) + len(PASSED)
-    evt.data["nightroles"].extend(list_players(("guardian angel", "bodyguard")))
+    evt.data["nightroles"].extend(get_players(("guardian angel", "bodyguard")))
 
 @event_listener("transition_day", priority=4.2)
-def on_transition_day(evt, cli, var):
-    pl = list_players()
+def on_transition_day(evt, var):
+    pl = get_players()
     vs = set(evt.data["victims"])
     for v in pl:
         if v in vs:
             if v in var.DYING:
                 continue
-            for g in var.ROLES["guardian angel"]:
-                if GUARDED.get(g) == v:
+            for g in get_all_players(("guardian angel",)):
+                if GUARDED.get(g.nick) == v.nick:
                     evt.data["numkills"][v] -= 1
                     if evt.data["numkills"][v] >= 0:
                         evt.data["killers"][v].pop(0)
                     if evt.data["numkills"][v] <= 0 and v not in evt.data["protected"]:
                         evt.data["protected"][v] = "angel"
                     elif evt.data["numkills"][v] <= 0:
-                        var.ACTIVE_PROTECTIONS[v].append("angel")
-            for g in var.ROLES["bodyguard"]:
-                if GUARDED.get(g) == v:
+                        var.ACTIVE_PROTECTIONS[v.nick].append("angel")
+            for g in get_all_players(("bodyguard",)):
+                if GUARDED.get(g.nick) == v.nick:
                     evt.data["numkills"][v] -= 1
                     if evt.data["numkills"][v] >= 0:
                         evt.data["killers"][v].pop(0)
                     if evt.data["numkills"][v] <= 0 and v not in evt.data["protected"]:
                         evt.data["protected"][v] = "bodyguard"
                     elif evt.data["numkills"][v] <= 0:
-                        var.ACTIVE_PROTECTIONS[v].append("bodyguard")
+                        var.ACTIVE_PROTECTIONS[v.nick].append("bodyguard")
         else:
             for g in var.ROLES["guardian angel"]:
-                if GUARDED.get(g) == v:
-                    var.ACTIVE_PROTECTIONS[v].append("angel")
+                if GUARDED.get(g) == v.nick:
+                    var.ACTIVE_PROTECTIONS[v.nick].append("angel")
             for g in var.ROLES["bodyguard"]:
-                if GUARDED.get(g) == v:
-                    var.ACTIVE_PROTECTIONS[v].append("bodyguard")
+                if GUARDED.get(g) == v.nick:
+                    var.ACTIVE_PROTECTIONS[v.nick].append("bodyguard")
 
 @event_listener("fallen_angel_guard_break")
-def on_fagb(evt, cli, var, victim, killer):
-    for g in var.ROLES["guardian angel"]:
-        if GUARDED.get(g) == victim:
+def on_fagb(evt, var, user, killer):
+    for g in get_all_players(("guardian angel",)):
+        if GUARDED.get(g.nick) == user.nick:
             if random.random() < var.FALLEN_ANGEL_KILLS_GUARDIAN_ANGEL_CHANCE:
                 if g in evt.data["protected"]:
                     del evt.data["protected"][g]
@@ -162,10 +164,10 @@ def on_fagb(evt, cli, var, victim, killer):
                     evt.data["onlybywolves"].add(g)
                 evt.data["victims"].append(g)
                 evt.data["killers"][g].append(killer)
-            if g != victim:
-                pm(cli, g, messages["fallen_angel_success"].format(victim))
-    for g in var.ROLES["bodyguard"]:
-        if GUARDED.get(g) == victim:
+            if g is not user:
+                g.send(messages["fallen_angel_success"].format(user))
+    for g in get_all_players(("bodyguard",)):
+        if GUARDED.get(g.nick) == user.nick:
             if g in evt.data["protected"]:
                 del evt.data["protected"][g]
             evt.data["bywolves"].add(g)
@@ -173,19 +175,19 @@ def on_fagb(evt, cli, var, victim, killer):
                 evt.data["onlybywolves"].add(g)
             evt.data["victims"].append(g)
             evt.data["killers"][g].append(killer)
-            if g != victim:
-                pm(cli, g, messages["fallen_angel_success"].format(victim))
+            if g is not user:
+                g.send(messages["fallen_angel_success"].format(user))
 
 @event_listener("transition_day_resolve", priority=2)
-def on_transition_day_resolve(evt, cli, var, victim):
+def on_transition_day_resolve(evt, var, victim):
     if evt.data["protected"].get(victim) == "angel":
         evt.data["message"].append(messages["angel_protection"].format(victim))
         evt.data["novictmsg"] = False
         evt.stop_processing = True
         evt.prevent_default = True
     elif evt.data["protected"].get(victim) == "bodyguard":
-        for bodyguard in var.ROLES["bodyguard"]:
-            if GUARDED.get(bodyguard) == victim:
+        for bodyguard in get_all_players(("bodyguard",)):
+            if GUARDED.get(bodyguard.nick) == victim.nick:
                 evt.data["dead"].append(bodyguard)
                 evt.data["message"].append(messages["bodyguard_protection"].format(bodyguard))
                 evt.data["novictmsg"] = False
@@ -194,9 +196,9 @@ def on_transition_day_resolve(evt, cli, var, victim):
                 break
 
 @event_listener("transition_day_resolve_end")
-def on_transition_day_resolve_end(evt, cli, var, victims):
-    for bodyguard in var.ROLES["bodyguard"]:
-        if GUARDED.get(bodyguard) in list_players(var.WOLF_ROLES) and bodyguard not in evt.data["dead"] and bodyguard not in evt.data["bitten"]:
+def on_transition_day_resolve_end(evt, var, victims):
+    for bodyguard in get_all_players(("bodyguard",)):
+        if GUARDED.get(bodyguard.nick) in list_players(var.WOLF_ROLES) and bodyguard not in evt.data["dead"] and bodyguard not in evt.data["bitten"]:
             r = random.random()
             if r < var.BODYGUARD_DIES_CHANCE:
                 evt.data["bywolves"].add(bodyguard)
@@ -206,8 +208,8 @@ def on_transition_day_resolve_end(evt, cli, var, victims):
                 else: # off and team
                     evt.data["message"].append(messages["bodyguard_protection"].format(bodyguard))
                 evt.data["dead"].append(bodyguard)
-    for gangel in var.ROLES["guardian angel"]:
-        if GUARDED.get(gangel) in list_players(var.WOLF_ROLES) and gangel not in evt.data["dead"] and gangel not in evt.data["bitten"]:
+    for gangel in get_all_players(("guardian angel",)):
+        if GUARDED.get(gangel.nick) in list_players(var.WOLF_ROLES) and gangel not in evt.data["dead"] and gangel not in evt.data["bitten"]:
             r = random.random()
             if r < var.GUARDIAN_ANGEL_DIES_CHANCE:
                 evt.data["bywolves"].add(gangel)
@@ -225,10 +227,10 @@ def on_transition_night_begin(evt, cli, var):
     GUARDED.clear()
 
 @event_listener("transition_night_end", priority=2)
-def on_transition_night_end(evt, cli, var):
+def on_transition_night_end(evt, var):
     # the messages for angel and guardian angel are different enough to merit individual loops
-    ps = list_players()
-    for bg in var.ROLES["bodyguard"]:
+    ps = get_players()
+    for bg in get_all_players(("bodyguard",)):
         pl = ps[:]
         random.shuffle(pl)
         pl.remove(bg)
@@ -237,52 +239,52 @@ def on_transition_night_end(evt, cli, var):
         if chance > 0:
             warning = messages["bodyguard_death_chance"].format(chance)
 
-        if bg in var.PLAYERS and not is_user_simple(bg):
-            pm(cli, bg, messages["bodyguard_notify"].format(warning))
-        else:
-            pm(cli, bg, messages["bodyguard_simple"])  # !simple
-        pm(cli, bg, "Players: " + ", ".join(pl))
+        to_send = "bodyguard_notify"
+        if bg.prefers_simple():
+            to_send = "bodyguard_simple"
+        bg.send(messages[to_send].format(warning), "Players: " + ", ".join(p.nick for p in pl), sep="\n")
 
-    for gangel in var.ROLES["guardian angel"]:
+    for gangel in get_all_players(("guardian angel",)):
         pl = ps[:]
         random.shuffle(pl)
         gself = messages["guardian_self_notification"]
         if not var.GUARDIAN_ANGEL_CAN_GUARD_SELF:
             pl.remove(gangel)
             gself = ""
-        if LASTGUARDED.get(gangel) in pl:
-            pl.remove(LASTGUARDED[gangel])
+        if gangel.nick in LASTGUARDED:
+            user = users._get(LASTGUARDED[gangel.nick]) # FIXME
+            if user in pl:
+                pl.remove(user)
         chance = math.floor(var.GUARDIAN_ANGEL_DIES_CHANCE * 100)
         warning = ""
         if chance > 0:
             warning = messages["bodyguard_death_chance"].format(chance)
 
-        if gangel in var.PLAYERS and not is_user_simple(gangel):
-            pm(cli, gangel, messages["guardian_notify"].format(warning, gself))
-        else:
-            pm(cli, gangel, messages["guardian_simple"])  # !simple
-        pm(cli, gangel, "Players: " + ", ".join(pl))
+        to_send = "guardian_notify"
+        if gangel.prefers_simple():
+            to_send = "guardian_simple"
+        gangel.send(messages[to_send].format(warning, gself), "Players: " + ", ".join(p.nick for p in pl), sep="\n")
 
 @event_listener("assassinate")
-def on_assassinate(evt, cli, var, nick, target, prot):
+def on_assassinate(evt, var, killer, target, prot):
     if prot == "angel" and var.GAMEPHASE == "night":
-        var.ACTIVE_PROTECTIONS[target].remove("angel")
+        var.ACTIVE_PROTECTIONS[target.nick].remove("angel")
         evt.prevent_default = True
         evt.stop_processing = True
-        cli.msg(botconfig.CHANNEL, messages[evt.params.message_prefix + "angel"].format(nick, target))
+        channels.Main.send(messages[evt.params.message_prefix + "angel"].format(killer, target))
     elif prot == "bodyguard":
-        var.ACTIVE_PROTECTIONS[target].remove("bodyguard")
+        var.ACTIVE_PROTECTIONS[target.nick].remove("bodyguard")
         evt.prevent_default = True
         evt.stop_processing = True
         for bg in var.ROLES["bodyguard"]:
-            if GUARDED.get(bg) == target:
-                cli.msg(botconfig.CHANNEL, messages[evt.params.message_prefix + "bodyguard"].format(nick, target, bg))
-                evt.params.del_player(cli, bg, True, end_game=False, killer_role=evt.params.nickrole, deadlist=evt.params.deadlist, original=evt.params.original, ismain=False)
-                evt.data["pl"] = evt.params.refresh_pl(evt.data["pl"])
+            if GUARDED.get(bg) == target.nick:
+                channels.Main.send(messages[evt.params.message_prefix + "bodyguard"].format(killer, target, bg))
+                # redirect the assassination to the bodyguard
+                evt.data["target"] = users._get(bg) # FIXME
                 break
 
 @event_listener("begin_day")
-def on_begin_day(evt, cli, var):
+def on_begin_day(evt, var):
     PASSED.clear()
     # clear out LASTGUARDED for people that didn't guard last night
     for g in list(LASTGUARDED.keys()):

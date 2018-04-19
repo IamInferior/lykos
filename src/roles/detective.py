@@ -4,7 +4,8 @@ import random
 
 import src.settings as var
 from src.utilities import *
-from src import debuglog, errlog, plog
+from src import users, channels, debuglog, errlog, plog
+from src.functions import get_players, get_all_players
 from src.decorators import cmd, event_listener
 from src.messages import messages
 from src.events import Event
@@ -61,24 +62,24 @@ def on_rename(evt, cli, var, prefix, nick):
         INVESTIGATED.add(nick)
 
 @event_listener("del_player")
-def on_del_player(evt, cli, var, nick, nickrole, nicktpls, death_triggers):
-    INVESTIGATED.discard(nick)
+def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
+    INVESTIGATED.discard(user.nick)
 
 @event_listener("get_special")
-def on_get_special(evt, cli, var):
-    evt.data["special"].update(var.ROLES["detective"])
+def on_get_special(evt, var):
+    evt.data["special"].update(get_players(("detective",)))
 
 @event_listener("exchange_roles")
-def on_exchange(evt, cli, var, actor, nick, actor_role, nick_role):
-    if actor_role == "detective" and nick_role != "detective":
-        INVESTIGATED.discard(actor)
-    elif nick_role == "detective" and actor_role != "detective":
-        INVESTIGATED.discard(nick)
+def on_exchange(evt, var, actor, target, actor_role, target_role):
+    if actor_role == "detective" and target_role != "detective":
+        INVESTIGATED.discard(actor.nick)
+    elif target_role == "detective" and actor_role != "detective":
+        INVESTIGATED.discard(target.nick)
 
 @event_listener("transition_night_end", priority=2)
-def on_transition_night_end(evt, cli, var):
-    ps = list_players()
-    for dttv in var.ROLES["detective"]:
+def on_transition_night_end(evt, var):
+    ps = get_players()
+    for dttv in get_all_players(("detective",)):
         pl = ps[:]
         random.shuffle(pl)
         pl.remove(dttv)
@@ -86,12 +87,10 @@ def on_transition_night_end(evt, cli, var):
         warning = ""
         if chance > 0:
             warning = messages["detective_chance"].format(chance)
-        if dttv in var.PLAYERS and not is_user_simple(dttv):
-            pm(cli, dttv, messages["detective_notify"].format(warning))
-        else:
-            pm(cli, dttv, messages["detective_simple"])  # !simple
-        pm(cli, dttv, "Players: " + ", ".join(pl))
-
+        to_send = "detective_notify"
+        if dttv.prefers_simple():
+            to_send = "detective_simple"
+        dttv.send(messages[to_send].format(warning), "Players: " + ", ".join(p.nick for p in pl), sep="\n")
 
 @event_listener("transition_night_begin")
 def on_transition_night_begin(evt, cli, var):

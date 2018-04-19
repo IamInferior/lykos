@@ -1,4 +1,5 @@
 import fnmatch
+import time
 import re
 
 from src.context import IRCContext, Features, lower, equals
@@ -145,16 +146,9 @@ def _exists(nick=None, ident=None, host=None, realname=None, account=None, *, al
 def exists(nick, *stuff, **morestuff): # backwards-compatible API
     return nick in var.USERS
 
-def users_():
+def users():
     """Iterate over the users in the registry."""
     yield from _users
-
-class users: # backwards-compatible API
-    def __iter__(self):
-        yield from var.USERS
-    @staticmethod
-    def items():
-        yield from var.USERS.items()
 
 def complete_match(string, users):
     matches = []
@@ -218,6 +212,7 @@ class User(IRCContext):
         self.realname = realname
         self.account = account
         self.channels = {}
+        self.timestamp = time.time()
 
         if Bot is not None and Bot.nick == nick and {Bot.ident, Bot.host, Bot.realname, Bot.account} == {None}:
             self = Bot
@@ -225,6 +220,7 @@ class User(IRCContext):
             self.host = host
             self.realname = realname
             self.account = account
+            self.timestamp = time.time()
 
         elif ident is not None and host is not None:
             users = set(_users)
@@ -299,6 +295,17 @@ class User(IRCContext):
 
     def __eq__(self, other):
         return self._compare(other, __class__, "nick", "ident", "host", "realname", "account")
+
+    # User objects are not copyable - this is a deliberate design decision
+    # Therefore, those two functions here only return the object itself
+    # Even if we tried to create new instances, the logic in __new__ would
+    # just fetch back the same instance, so we save ourselves the trouble
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
 
     def lower(self):
         temp = type(self)(self.client, lower(self.nick), lower(self.ident), lower(self.host, casemapping="ascii"), lower(self.realname), lower(self.account))
@@ -438,7 +445,7 @@ class User(IRCContext):
 
         else:
             if not var.DISABLE_ACCOUNTS and temp.account:
-                var.PING_IF_PREFS[temp.account] = value
+                var.PING_IF_PREFS_ACCS[temp.account] = value
                 db.set_pingif(value, temp.account, None)
                 with var.WARNING_LOCK:
                     if value not in var.PING_IF_NUMS_ACCS:
@@ -594,14 +601,21 @@ class BotUser(User): # TODO: change all the 'if x is Bot' for 'if isinstance(x, 
         self.modes = set()
         return self
 
+    def with_host(self, host):
+        """Create a new bot instance with a new host."""
+        if self.ident is None and self.host is None:
+            # we don't have full details on our ident yet; setting host now causes bugs down the road since
+            # ident will subsequently not update. We'll pick up the new host whenever we finish setting ourselves up
+            return self
+        new = super().__new__(type(self), self.client, self.nick, self.ident, host, self.realname, self.account)
+        if new is not self:
+            new.modes = set(self.modes)
+            new.channels = {chan: set(modes) for chan, modes in self.channels.items()}
+        return new
+
     def lower(self):
-        temp = type(self)(self.client, lower(self.nick))
-        if temp is not self:
-            temp.ident = lower(self.ident)
-            temp.host = lower(self.host, casemapping="ascii")
-            temp.realname = lower(self.realname)
-            temp.account = lower(self.account)
-            temp.modes = self.modes
+        temp = super().__new__(type(self), self.client, lower(self.nick), lower(self.ident), lower(self.host, casemapping="ascii"), lower(self.realname), lower(self.account))
+        if temp is not self: # If everything is already lowercase, we'll get back the same instance
             temp.channels = self.channels
             temp.ref = self.ref or self
         return temp
