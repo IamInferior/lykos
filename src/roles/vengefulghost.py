@@ -39,18 +39,17 @@ def vg_kill(var, wrapper, message):
         return
 
     orig = target
-    evt = Event("targeted_command", {"target": target.nick, "misdirection": True, "exchange": False})
-    evt.dispatch(wrapper.source.client, var, "kill", wrapper.source.nick, target.nick, frozenset({"detrimental"}))
+    evt = Event("targeted_command", {"target": target, "misdirection": True, "exchange": False})
+    evt.dispatch(var, "kill", wrapper.source, target, frozenset({"detrimental"}))
     if evt.prevent_default:
         return
-    target = users._get(evt.data["target"]) # FIXME
+    target = evt.data["target"]
 
     KILLS[wrapper.source] = target
 
     wrapper.pm(messages["player_kill"].format(orig))
 
     debuglog("{0} (vengeful ghost) KILL: {1} ({2})".format(wrapper.source.nick, target, get_main_role(target)))
-    chk_nightdone(wrapper.source.client)
 
 @command("retract", "r", chan=False, pm=True, playing=False, phases=("night",))
 def vg_retract(var, wrapper, message):

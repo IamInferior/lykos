@@ -20,21 +20,17 @@ def hunter_kill(var, wrapper, message):
     if wrapper.source in HUNTERS and wrapper.source not in KILLS:
         wrapper.pm(messages["hunter_already_killed"])
         return
-    target = get_target(var, wrapper, re.split(" +", message)[0])
+    target = get_target(var, wrapper, re.split(" +", message)[0], not_self_message="no_suicide")
     if not target:
         return
 
-    if wrapper.source is target:
-        wrapper.pm(messages["no_suicide"])
-        return
-
     orig = target
-    evt = Event("targeted_command", {"target": target.nick, "misdirection": True, "exchange": True})
-    evt.dispatch(wrapper.client, var, "kill", wrapper.source.nick, target.nick, frozenset({"detrimental"}))
+    evt = Event("targeted_command", {"target": target, "misdirection": True, "exchange": True})
+    evt.dispatch(var, "kill", wrapper.source, target, frozenset({"detrimental"}))
     if evt.prevent_default:
         return
 
-    target = users._get(evt.data["target"]) # FIXME: Need to fix once targeted_command uses the new API
+    target = evt.data["target"]
 
     KILLS[wrapper.source] = target
     HUNTERS.add(wrapper.source)
@@ -43,7 +39,6 @@ def hunter_kill(var, wrapper, message):
     wrapper.pm(messages["player_kill"].format(orig))
 
     debuglog("{0} (hunter) KILL: {1} ({2})".format(wrapper.source, target, get_main_role(target)))
-    chk_nightdone(wrapper.client)
 
 @command("retract", "r", chan=False, pm=True, playing=True, phases=("night",), roles=("hunter",))
 def hunter_retract(var, wrapper, message):
@@ -67,7 +62,6 @@ def hunter_pass(var, wrapper, message):
     wrapper.pm(messages["hunter_pass"])
 
     debuglog("{0} (hunter) PASS".format(wrapper.source))
-    chk_nightdone(wrapper.client)
 
 @event_listener("del_player")
 def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
@@ -142,12 +136,11 @@ def on_transition_night_end(evt, var):
         hunter.send(messages[to_send], "Players: " + ", ".join(p.nick for p in pl), sep="\n")
 
 @event_listener("succubus_visit")
-def on_succubus_visit(evt, cli, var, nick, victim):
-    user = users._get(victim) # FIXME
-    if user in KILLS and KILLS[user].nick in var.ROLES["succubus"]: # FIXME
-        user.send(messages["no_kill_succubus"].format(KILLS[user]))
-        del KILLS[user]
-        HUNTERS.discard(user)
+def on_succubus_visit(evt, var, succubus, target):
+    if target in KILLS and KILLS[target] in get_all_players(("succubus",)):
+        target.send(messages["no_kill_succubus"].format(KILLS[target]))
+        del KILLS[target]
+        HUNTERS.discard(target)
 
 @event_listener("begin_day")
 def on_begin_day(evt, var):
@@ -165,7 +158,7 @@ def on_get_role_metadata(evt, var, kind):
     if kind == "night_kills":
         # hunters is the set of all hunters that have not killed in a *previous* night
         # (if they're in both HUNTERS and KILLS, then they killed tonight and should be counted)
-        hunters = ({users._get(h) for h in var.ROLES["hunter"]} - HUNTERS) | set(KILLS.keys()) # FIXME
+        hunters = (var.ROLES["hunter"] - HUNTERS) | set(KILLS.keys())
         evt.data["hunter"] = len(hunters)
 
 # vim: set sw=4 expandtab:

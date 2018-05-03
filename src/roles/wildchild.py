@@ -33,7 +33,6 @@ def choose_idol(cli, nick, chan, rest):
     pm(cli, nick, messages["wild_child_success"].format(victim))
 
     debuglog("{0} (wild child) IDOLIZE: {1} ({2})".format(nick, victim, get_role(victim)))
-    chk_nightdone(cli)
 
 @event_listener("see")
 def on_see(evt, cli, var, seer, victim):
@@ -92,7 +91,7 @@ def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
         child.send(messages["idol_died"])
         WILD_CHILDREN.add(child.nick)
         change_role(child, get_main_role(child), "wolf")
-        var.ROLES["wild child"].discard(child.nick)
+        var.ROLES["wild child"].discard(child)
 
         wcroles = var.WOLFCHAT_ROLES
         if var.RESTRICT_WOLFCHAT & var.RW_REM_NON_WOLVES:

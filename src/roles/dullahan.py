@@ -4,7 +4,7 @@ import random
 from collections import defaultdict, deque
 
 from src.utilities import *
-from src.functions import get_players, get_all_players, get_target, get_main_role
+from src.functions import get_players, get_all_players, get_target, get_main_role, get_reveal_role
 from src import users, channels, debuglog, errlog, plog
 from src.decorators import command, event_listener
 from src.messages import messages
@@ -21,28 +21,22 @@ def dullahan_kill(var, wrapper, message):
         wrapper.pm(messages["dullahan_targets_dead"])
         return
 
-    target = get_target(var, wrapper, re.split(" +", message)[0])
+    target = get_target(var, wrapper, re.split(" +", message)[0], not_self_message="no_suicide")
     if not target:
         return
 
-    if target is wrapper.source:
-        wrapper.pm(messages["no_suicide"])
-        return
-
     orig = target
-    evt = Event("targeted_command", {"target": target.nick, "misdirection": True, "exchange": True})
-    evt.dispatch(wrapper.client, var, "kill", wrapper.source.nick, target.nick, frozenset({"detrimental"}))
+    evt = Event("targeted_command", {"target": target, "misdirection": True, "exchange": True})
+    evt.dispatch(var, "kill", wrapper.source, target, frozenset({"detrimental"}))
     if evt.prevent_default:
         return
-    target = users._get(evt.data["target"]) # FIXME: Need to fix once targeted_command uses the new API
+    target = evt.data["target"]
 
     KILLS[wrapper.source] = target
 
     wrapper.pm(messages["player_kill"].format(orig))
 
     debuglog("{0} (dullahan) KILL: {1} ({2})".format(wrapper.source, target, get_main_role(target)))
-
-    chk_nightdone(wrapper.client)
 
 @command("retract", "r", chan=False, pm=True, playing=True, phases=("night",), roles=("dullahan",))
 def dullahan_retract(var, wrapper, message):
@@ -98,7 +92,7 @@ def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
                 prots.popleft()
 
             if var.ROLE_REVEAL in ("on", "team"):
-                role = get_reveal_role(target.nick)
+                role = get_reveal_role(target)
                 an = "n" if role.startswith(("a", "e", "i", "o", "u")) else ""
                 channels.Main.send(messages["dullahan_die_success"].format(user, target, an, role))
             else:
@@ -183,9 +177,9 @@ def on_role_assignment(evt, cli, var, gamemode, pl, restart):
     if var.ROLES["dullahan"]:
         max_targets = math.ceil(8.1 * math.log(len(pl), 10) - 5)
         for dull in var.ROLES["dullahan"]:
-            TARGETS[users._get(dull)] = set() # FIXME
+            TARGETS[dull] = set()
         dull_targets = Event("dullahan_targets", {"targets": TARGETS}) # support sleepy
-        dull_targets.dispatch(cli, var, {users._get(x) for x in var.ROLES["dullahan"]}, max_targets) # FIXME
+        dull_targets.dispatch(cli, var, var.ROLES["dullahan"], max_targets)
 
         players = [users._get(x) for x in pl] # FIXME
 
@@ -198,24 +192,18 @@ def on_role_assignment(evt, cli, var, gamemode, pl, restart):
                 ts.add(target)
 
 @event_listener("succubus_visit")
-def on_succubus_visit(evt, cli, var, nick, victim):
-    user = users._get(victim) # FIXME
-    if user in TARGETS:
-        succ_target = False
-        for target in set(TARGETS[user]):
-            if target.nick in var.ROLES["succubus"]:
-                TARGETS[user].remove(target)
-                succ_target = True
-        if succ_target:
-            pm(cli, victim, messages["dullahan_no_kill_succubus"])
-    if user in KILLS and KILLS[user].nick in var.ROLES["succubus"]:
-        pm(cli, victim, messages["no_kill_succubus"].format(KILLS[user]))
-        del KILLS[user]
+def on_succubus_visit(evt, var, succubus, target):
+    if target in TARGETS and succubus in TARGETS[target]:
+        TARGETS[target].remove(succubus)
+        target.send(messages["dullahan_no_kill_succubus"])
+    if target in KILLS and KILLS[target] in get_all_players(("succubus",)):
+        target.send(messages["no_kill_succubus"].format(KILLS[target]))
+        del KILLS[target]
 
 @event_listener("myrole")
 def on_myrole(evt, var, user):
     # Remind dullahans of their targets
-    if user.nick in var.ROLES["dullahan"]:
+    if user in var.ROLES["dullahan"]:
         targets = list(TARGETS[user])
         for target in list(targets):
             if target.nick in var.DEAD:
@@ -254,8 +242,7 @@ def on_get_role_metadata(evt, var, kind):
     if kind == "night_kills":
         num = 0
         for dull in var.ROLES["dullahan"]:
-            user = users._get(dull) # FIXME
-            for target in TARGETS[user]:
+            for target in TARGETS[dull]:
                 if target.nick not in var.DEAD:
                     num += 1
                     break

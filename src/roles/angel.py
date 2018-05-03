@@ -34,11 +34,15 @@ def guard(cli, nick, chan, rest):
     if role == "guardian angel" and LASTGUARDED.get(nick) == victim:
         pm(cli, nick, messages["guardian_target_another"].format(victim))
         return
+
+    angel = users._get(nick) # FIXME
+    target = users._get(victim) # FIXME
+
     # self-guard ignores luck/misdirection/exchange totem
-    evt = Event("targeted_command", {"target": victim, "misdirection": victim != nick, "exchange": victim != nick})
-    if not evt.dispatch(cli, var, "guard", nick, victim, frozenset({"beneficial"})):
+    evt = Event("targeted_command", {"target": target, "misdirection": (angel is not target), "exchange": (angel is not target)})
+    if not evt.dispatch(var, "guard", angel, target, frozenset({"beneficial"})):
         return
-    victim = evt.data["target"]
+    victim = evt.data["target"].nick
     GUARDED[nick] = victim
     LASTGUARDED[nick] = victim
     if victim == nick:
@@ -47,7 +51,6 @@ def guard(cli, nick, chan, rest):
         pm(cli, nick, messages["protecting_target"].format(GUARDED[nick]))
         pm(cli, victim, messages["target_protected"])
     debuglog("{0} ({1}) GUARD: {2} ({3})".format(nick, role, victim, get_role(victim)))
-    chk_nightdone(cli)
 
 @cmd("pass", chan=False, pm=True, playing=True, phases=("night",), roles=("bodyguard", "guardian angel"))
 def pass_cmd(cli, nick, chan, rest):
@@ -58,7 +61,6 @@ def pass_cmd(cli, nick, chan, rest):
     PASSED.add(nick)
     pm(cli, nick, messages["guardian_no_protect"])
     debuglog("{0} ({1}) PASS".format(nick, get_role(nick)))
-    chk_nightdone(cli)
 
 @event_listener("rename_player")
 def on_rename(evt, cli, var, prefix, nick):
@@ -146,10 +148,10 @@ def on_transition_day(evt, var):
                         var.ACTIVE_PROTECTIONS[v.nick].append("bodyguard")
         else:
             for g in var.ROLES["guardian angel"]:
-                if GUARDED.get(g) == v.nick:
+                if GUARDED.get(g.nick) == v.nick:
                     var.ACTIVE_PROTECTIONS[v.nick].append("angel")
             for g in var.ROLES["bodyguard"]:
-                if GUARDED.get(g) == v.nick:
+                if GUARDED.get(g.nick) == v.nick:
                     var.ACTIVE_PROTECTIONS[v.nick].append("bodyguard")
 
 @event_listener("fallen_angel_guard_break")
@@ -277,10 +279,10 @@ def on_assassinate(evt, var, killer, target, prot):
         evt.prevent_default = True
         evt.stop_processing = True
         for bg in var.ROLES["bodyguard"]:
-            if GUARDED.get(bg) == target.nick:
+            if GUARDED.get(bg.nick) == target.nick:
                 channels.Main.send(messages[evt.params.message_prefix + "bodyguard"].format(killer, target, bg))
                 # redirect the assassination to the bodyguard
-                evt.data["target"] = users._get(bg) # FIXME
+                evt.data["target"] = bg
                 break
 
 @event_listener("begin_day")

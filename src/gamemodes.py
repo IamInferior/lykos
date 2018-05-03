@@ -2,6 +2,7 @@ import random
 import math
 import threading
 import copy
+import functools
 from datetime import datetime
 from collections import defaultdict, OrderedDict
 
@@ -9,8 +10,8 @@ import botconfig
 import src.settings as var
 from src.utilities import *
 from src.messages import messages
-from src.functions import get_players, get_all_players
-from src.decorators import handle_error
+from src.functions import get_players, get_all_players, get_main_role
+from src.decorators import handle_error, command
 from src import events, channels, users
 
 def game_mode(name, minp, maxp, likelihood = 0):
@@ -105,7 +106,7 @@ class GameMode:
         pass
 
     # Here so any game mode can use it
-    def lovers_chk_win(self, evt, cli, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
+    def lovers_chk_win(self, evt, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
         winner = evt.data["winner"]
         if winner is not None and winner.startswith("@"):
             return # fool won, lovers can't win even if they would
@@ -120,7 +121,7 @@ class GameMode:
             evt.data["additional_winners"] = list(lovers)
             evt.data["message"] = messages["lovers_win"]
 
-    def all_dead_chk_win(self, evt, cli, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
+    def all_dead_chk_win(self, evt, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
         if evt.data["winner"] == "no_team_wins":
             evt.data["winner"] = "everyone"
             evt.data["message"] = messages["everyone_died_won"]
@@ -199,14 +200,14 @@ class VillagergameMode(GameMode):
         events.remove_listener("transition_day_begin", self.transition_day)
         events.remove_listener("retribution_kill", self.on_retribution_kill, priority=4)
 
-    def chk_win(self, evt, cli, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
+    def chk_win(self, evt, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
         # village can only win via unanimous vote on the bot nick
         # villagergame_lose should probably explain that mechanic
         # Note: not implemented here since that needs to work in default too
         pc = len(var.ALL_PLAYERS)
         if (pc >= 8 and lpl <= 4) or lpl <= 2:
             evt.data["winner"] = ""
-            evt.data["message"] = messages["villagergame_lose"].format(botconfig.CMD_CHAR, botconfig.NICK)
+            evt.data["message"] = messages["villagergame_lose"].format(botconfig.CMD_CHAR, users.Bot.nick)
         else:
             evt.data["winner"] = None
 
@@ -215,7 +216,7 @@ class VillagergameMode(GameMode):
         evt.data["transition_day"] = lambda cli, gameid=0: self.prolong_night(cli, var, gameid, transition_day)
 
     def prolong_night(self, cli, var, gameid, transition_day):
-        nspecials = len(var.ROLES["seer"] | var.ROLES["harlot"] | var.ROLES["shaman"] | var.ROLES["crazed shaman"])
+        nspecials = len(get_all_players(("seer", "harlot", "shaman", "crazed shaman")))
         rand = random.gauss(5, 1.5)
         if rand <= 0 and nspecials > 0:
             transition_day(cli, gameid=gameid)
@@ -227,7 +228,7 @@ class VillagergameMode(GameMode):
         # 30% chance we kill a safe, otherwise kill at random
         # when killing safes, go after seer, then harlot, then shaman
         self.delaying_night = False
-        pl = list_players()
+        pl = get_players()
         tgt = None
         seer = None
         hlt = None
@@ -239,7 +240,7 @@ class VillagergameMode(GameMode):
             hlt = list(var.ROLES["harlot"])[0]
             from src.roles import harlot
             hvst = harlot.VISITED.get(hlt)
-            if hvst:
+            if hvst is not None:
                 pl.remove(hlt)
         if len(var.ROLES["shaman"]) == 1:
             shmn = list(var.ROLES["shaman"])[0]
@@ -255,7 +256,7 @@ class VillagergameMode(GameMode):
         if not tgt:
             tgt = random.choice(pl)
         from src.roles import wolf
-        wolf.KILLS[botconfig.NICK] = [tgt]
+        wolf.KILLS[users.Bot.nick] = [tgt.nick]
 
     def on_retribution_kill(self, evt, var, victim, orig_target):
         # There are no wolves for this totem to kill
@@ -354,7 +355,7 @@ class EvilVillageMode(GameMode):
     def teardown(self):
         events.remove_listener("chk_win", self.chk_win)
 
-    def chk_win(self, evt, cli, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
+    def chk_win(self, evt, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
         lsafes = len(list_players(["oracle", "seer", "guardian angel", "shaman", "hunter", "villager"]))
         lcultists = len(list_players(["cultist"]))
         evt.stop_processing = True
@@ -779,7 +780,7 @@ class GuardianMode(GameMode):
     def teardown(self):
         events.remove_listener("chk_win", self.chk_win)
 
-    def chk_win(self, evt, cli, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
+    def chk_win(self, evt, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
         lguardians = len(list_players(["guardian angel", "bodyguard"]))
 
         if lpl < 1:
@@ -877,17 +878,16 @@ class SleepyMode(GameMode):
         self.having_nightmare = None
 
     def startup(self):
-        from src import decorators
         events.add_listener("dullahan_targets", self.dullahan_targets)
         events.add_listener("transition_night_begin", self.setup_nightmares)
         events.add_listener("chk_nightdone", self.prolong_night)
         events.add_listener("transition_day_begin", self.nightmare_kill)
         events.add_listener("del_player", self.happy_fun_times)
         events.add_listener("rename_player", self.rename_player)
-        self.north_cmd = decorators.cmd("north", "n", chan=False, pm=True, playing=True, phases=("night",))(self.north)
-        self.east_cmd = decorators.cmd("east", "e", chan=False, pm=True, playing=True, phases=("night",))(self.east)
-        self.south_cmd = decorators.cmd("south", "s", chan=False, pm=True, playing=True, phases=("night",))(self.south)
-        self.west_cmd = decorators.cmd("west", "w", chan=False, pm=True, playing=True, phases=("night",))(self.west)
+        self.north_cmd = command("north", "n", chan=False, pm=True, playing=True, phases=("night",))(functools.partial(self.move, "n"))
+        self.east_cmd = command("east", "e", chan=False, pm=True, playing=True, phases=("night",))(functools.partial(self.move, "e"))
+        self.south_cmd = command("south", "s", chan=False, pm=True, playing=True, phases=("night",))(functools.partial(self.move, "s"))
+        self.west_cmd = command("west", "w", chan=False, pm=True, playing=True, phases=("night",))(functools.partial(self.move, "w"))
 
     def teardown(self):
         from src import decorators
@@ -913,13 +913,13 @@ class SleepyMode(GameMode):
 
     def dullahan_targets(self, evt, cli, var, dullahans, max_targets):
         for dull in dullahans:
-            evt.data["targets"][dull] = {users._get(x) for x in var.ROLES["priest"]}
+            evt.data["targets"][dull] = set(var.ROLES["priest"])
 
     def setup_nightmares(self, evt, cli, var):
         if random.random() < 1/5:
             self.having_nightmare = True
             with var.WARNING_LOCK:
-                t = threading.Timer(60, self.do_nightmare, (cli, var, random.choice(list_players()), var.NIGHT_COUNT))
+                t = threading.Timer(60, self.do_nightmare, (var, random.choice(get_players()), var.NIGHT_COUNT))
                 t.daemon = True
                 t.start()
         else:
@@ -930,14 +930,14 @@ class SleepyMode(GameMode):
             self.having_nightmare = nick
 
     @handle_error
-    def do_nightmare(self, cli, var, target, night):
+    def do_nightmare(self, var, target, night):
         if var.PHASE != "night" or var.NIGHT_COUNT != night:
             return
-        if target not in list_players():
+        if target not in get_players():
             return
         self.having_nightmare = target
-        pm(cli, self.having_nightmare, messages["sleepy_nightmare_begin"])
-        pm(cli, self.having_nightmare, messages["sleepy_nightmare_navigate"])
+        target.send(messages["sleepy_nightmare_begin"])
+        target.send(messages["sleepy_nightmare_navigate"])
         self.correct = [None, None, None]
         self.fake1 = [None, None, None]
         self.fake2 = [None, None, None]
@@ -963,9 +963,9 @@ class SleepyMode(GameMode):
         self.prev_direction = "n"
         self.start_direction = "n"
         self.on_path = set()
-        self.nightmare_step(cli)
+        self.nightmare_step()
 
-    def nightmare_step(self, cli):
+    def nightmare_step(self):
         if self.prev_direction == "n":
             directions = "north, east, and west"
         elif self.prev_direction == "e":
@@ -976,156 +976,60 @@ class SleepyMode(GameMode):
             directions = "north, south, and west"
 
         if self.step == 0:
-            pm(cli, self.having_nightmare, messages["sleepy_nightmare_0"].format(directions))
+            self.having_nightmare.send(messages["sleepy_nightmare_0"].format(directions))
         elif self.step == 1:
-            pm(cli, self.having_nightmare, messages["sleepy_nightmare_1"].format(directions))
+            self.having_nightmare.send(messages["sleepy_nightmare_1"].format(directions))
         elif self.step == 2:
-            pm(cli, self.having_nightmare, messages["sleepy_nightmare_2"].format(directions))
+            self.having_nightmare.send(messages["sleepy_nightmare_2"].format(directions))
         elif self.step == 3:
             if "correct" in self.on_path:
-                pm(cli, self.having_nightmare, messages["sleepy_nightmare_wake"])
+                self.having_nightmare.send(messages["sleepy_nightmare_wake"])
                 self.having_nightmare = None
-                chk_nightdone(cli)
             elif "fake1" in self.on_path:
-                pm(cli, self.having_nightmare, messages["sleepy_nightmare_fake_1"])
+                self.having_nightmare.send(messages["sleepy_nightmare_fake_1"])
                 self.step = 0
                 self.on_path = set()
                 self.prev_direction = self.start_direction
-                self.nightmare_step(cli)
+                self.nightmare_step()
             elif "fake2" in self.on_path:
-                pm(cli, self.having_nightmare, messages["sleepy_nightmare_fake_2"])
+                self.having_nightmare.send(messages["sleepy_nightmare_fake_2"])
                 self.step = 0
                 self.on_path = set()
                 self.prev_direction = self.start_direction
-                self.nightmare_step(cli)
+                self.nightmare_step()
 
-    def north(self, cli, nick, chan, rest):
-        if nick != self.having_nightmare:
+    def move(self, direction, var, wrapper, message):
+        if self.having_nightmare is not wrapper.source:
             return
-        if self.prev_direction == "s":
-            pm(cli, nick, messages["sleepy_nightmare_invalid_direction"])
+        opposite = {"n": "s", "e": "w", "s": "n", "w": "e"}
+        if self.prev_direction == opposite[direction]:
+            wrapper.pm(messages["sleepy_nightmare_invalid_direction"])
             return
         advance = False
-        if ("correct" in self.on_path or self.step == 0) and self.correct[self.step] == "n":
+        if ("correct" in self.on_path or self.step == 0) and self.correct[self.step] == direction:
             self.on_path.add("correct")
             advance = True
         else:
             self.on_path.discard("correct")
-        if ("fake1" in self.on_path or self.step == 0) and self.fake1[self.step] == "n":
+        if ("fake1" in self.on_path or self.step == 0) and self.fake1[self.step] == direction:
             self.on_path.add("fake1")
             advance = True
         else:
             self.on_path.discard("fake1")
-        if ("fake2" in self.on_path or self.step == 0) and self.fake2[self.step] == "n":
+        if ("fake2" in self.on_path or self.step == 0) and self.fake2[self.step] == direction:
             self.on_path.add("fake2")
             advance = True
         else:
             self.on_path.discard("fake2")
         if advance:
             self.step += 1
-            self.prev_direction = "n"
+            self.prev_direction = direction
         else:
             self.step = 0
             self.on_path = set()
             self.prev_direction = self.start_direction
-            pm(cli, self.having_nightmare, messages["sleepy_nightmare_restart"])
-        self.nightmare_step(cli)
-
-    def east(self, cli, nick, chan, rest):
-        if nick != self.having_nightmare:
-            return
-        if self.prev_direction == "w":
-            pm(cli, nick, messages["sleepy_nightmare_invalid_direction"])
-            return
-        advance = False
-        if ("correct" in self.on_path or self.step == 0) and self.correct[self.step] == "e":
-            self.on_path.add("correct")
-            advance = True
-        else:
-            self.on_path.discard("correct")
-        if ("fake1" in self.on_path or self.step == 0) and self.fake1[self.step] == "e":
-            self.on_path.add("fake1")
-            advance = True
-        else:
-            self.on_path.discard("fake1")
-        if ("fake2" in self.on_path or self.step == 0) and self.fake2[self.step] == "e":
-            self.on_path.add("fake2")
-            advance = True
-        else:
-            self.on_path.discard("fake2")
-        if advance:
-            self.step += 1
-            self.prev_direction = "e"
-        else:
-            self.step = 0
-            self.on_path = set()
-            self.prev_direction = self.start_direction
-            pm(cli, self.having_nightmare, messages["sleepy_nightmare_restart"])
-        self.nightmare_step(cli)
-
-    def south(self, cli, nick, chan, rest):
-        if nick != self.having_nightmare:
-            return
-        if self.prev_direction == "n":
-            pm(cli, nick, messages["sleepy_nightmare_invalid_direction"])
-            return
-        advance = False
-        if ("correct" in self.on_path or self.step == 0) and self.correct[self.step] == "s":
-            self.on_path.add("correct")
-            advance = True
-        else:
-            self.on_path.discard("correct")
-        if ("fake1" in self.on_path or self.step == 0) and self.fake1[self.step] == "s":
-            self.on_path.add("fake1")
-            advance = True
-        else:
-            self.on_path.discard("fake1")
-        if ("fake2" in self.on_path or self.step == 0) and self.fake2[self.step] == "s":
-            self.on_path.add("fake2")
-            advance = True
-        else:
-            self.on_path.discard("fake2")
-        if advance:
-            self.step += 1
-            self.prev_direction = "s"
-        else:
-            self.step = 0
-            self.on_path = set()
-            self.prev_direction = self.start_direction
-            pm(cli, self.having_nightmare, messages["sleepy_nightmare_restart"])
-        self.nightmare_step(cli)
-
-    def west(self, cli, nick, chan, rest):
-        if nick != self.having_nightmare:
-            return
-        if self.prev_direction == "e":
-            pm(cli, nick, messages["sleepy_nightmare_invalid_direction"])
-            return
-        advance = False
-        if ("correct" in self.on_path or self.step == 0) and self.correct[self.step] == "w":
-            self.on_path.add("correct")
-            advance = True
-        else:
-            self.on_path.discard("correct")
-        if ("fake1" in self.on_path or self.step == 0) and self.fake1[self.step] == "w":
-            self.on_path.add("fake1")
-            advance = True
-        else:
-            self.on_path.discard("fake1")
-        if ("fake2" in self.on_path or self.step == 0) and self.fake2[self.step] == "w":
-            self.on_path.add("fake2")
-            advance = True
-        else:
-            self.on_path.discard("fake2")
-        if advance:
-            self.step += 1
-            self.prev_direction = "w"
-        else:
-            self.step = 0
-            self.on_path = set()
-            self.prev_direction = self.start_direction
-            pm(cli, self.having_nightmare, messages["sleepy_nightmare_restart"])
-        self.nightmare_step(cli)
+            wrapper.pm(messages["sleepy_nightmare_restart"])
+        self.nightmare_step()
 
     def prolong_night(self, evt, var):
         if self.having_nightmare is not None:
@@ -1133,11 +1037,9 @@ class SleepyMode(GameMode):
 
     def nightmare_kill(self, evt, var):
         # if True, it means night ended before 1 minute
-        if self.having_nightmare is not None and self.having_nightmare is not True:
-            user = users._get(self.having_nightmare) # FIXME
-            if user in get_players():
-                var.DYING.add(user)
-                user.send(messages["sleepy_nightmare_death"])
+        if self.having_nightmare is not None and self.having_nightmare in get_players():
+            var.DYING.add(self.having_nightmare)
+            self.having_nightmare.send(messages["sleepy_nightmare_death"])
 
     def happy_fun_times(self, evt, var, user, mainrole, allroles, death_triggers):
         if death_triggers:
@@ -1176,7 +1078,7 @@ class MaelstromMode(GameMode):
         # matchmaker is conditionally enabled during night 1 only
         # monster and demoniac are nearly impossible to counter and don't add any interesting gameplay
         # succubus keeps around entranced people, who are then unable to win even if there are later no succubi (not very fun)
-        self.roles = list(var.ROLE_GUIDE.keys() - var.TEMPLATE_RESTRICTIONS.keys() - {"amnesiac", "clone", "dullahan", "matchmaker", "monster", "demoniac", "wild child", "succubus"})
+        self.roles = list(var.ROLE_GUIDE.keys() - var.TEMPLATE_RESTRICTIONS.keys() - {"amnesiac", "clone", "dullahan", "matchmaker", "monster", "demoniac", "wild child", "succubus", "piper"})
 
         self.DEAD_ACCOUNTS = set()
         self.DEAD_HOSTS = set()
@@ -1224,7 +1126,7 @@ class MaelstromMode(GameMode):
         from src import hooks, channels
         role = random.choice(self.roles)
         rolemap = copy.deepcopy(var.ROLES)
-        rolemap[role].add(wrapper.source.nick) # FIXME: add user instead of nick (can only be done once var.ROLES itself uses users)
+        rolemap[role].add(wrapper.source)
         mainroles = copy.deepcopy(var.MAIN_ROLES)
         mainroles[wrapper.source] = role
 
@@ -1232,14 +1134,14 @@ class MaelstromMode(GameMode):
             return self._on_join(var, wrapper)
 
         if not wrapper.source.is_fake or not botconfig.DEBUG_MODE:
-            cmodes = [("+" + hooks.Features["PREFIX"]["+"], wrapper.source)]
+            cmodes = [("+v", wrapper.source)]
             for mode in var.AUTO_TOGGLE_MODES & wrapper.source.channels[channels.Main]:
                 cmodes.append(("-" + mode, wrapper.source))
                 var.OLD_MODES[wrapper.source].add(mode)
             channels.Main.mode(*cmodes)
-        var.ROLES[role].add(wrapper.source.nick) # FIXME: add user instead of nick
-        var.ORIGINAL_ROLES[role].add(wrapper.source.nick)
-        var.FINAL_ROLES[wrapper.source.nick] = role
+        var.ROLES[role].add(wrapper.source)
+        var.ORIGINAL_ROLES[role].add(wrapper.source)
+        var.FINAL_ROLES[wrapper.source.nick] = role # FIXME: once FINAL_ROLES stores users
         var.MAIN_ROLES[wrapper.source] = role
         var.LAST_SAID_TIME[wrapper.source.nick] = datetime.now()
         if wrapper.source.nick in var.USERS:
@@ -1257,18 +1159,18 @@ class MaelstromMode(GameMode):
             relay_wolfchat_command(wrapper.source.client, wrapper.source.nick, messages["wolfchat_new_member"].format(wrapper.source.nick, role), var.WOLFCHAT_ROLES, is_wolf_command=True, is_kill_command=True)
             # TODO: make this part of !myrole instead, no reason we can't give out wofllist in that
             wolves = list_players(var.WOLFCHAT_ROLES)
-            pl = list_players()
+            pl = get_players()
             random.shuffle(pl)
-            pl.remove(wrapper.source.nick)
+            pl.remove(wrapper.source)
             for i, player in enumerate(pl):
-                prole = get_role(player)
+                prole = get_main_role(player)
                 if prole in var.WOLFCHAT_ROLES:
                     cursed = ""
                     if player in var.ROLES["cursed villager"]:
                         cursed = "cursed "
                     pl[i] = "\u0002{0}\u0002 ({1}{2})".format(player, cursed, prole)
                 elif player in var.ROLES["cursed villager"]:
-                    pl[i] = player + " (cursed)"
+                    pl[i] = player.nick + " (cursed)"
             wrapper.pm("Players: " + ", ".join(pl))
 
     def role_attribution(self, evt, cli, var, chk_win_conditions, villagers):
@@ -1279,7 +1181,7 @@ class MaelstromMode(GameMode):
         # don't do this n1
         if var.FIRST_NIGHT:
             return
-        villagers = list_players()
+        villagers = get_players()
         lpl = len(villagers)
         addroles = self._role_attribution(cli, var, villagers, False)
 
@@ -1292,7 +1194,7 @@ class MaelstromMode(GameMode):
 
         # Handle roles that need extra help
         for doctor in var.ROLES["doctor"]:
-            var.DOCTORS[doctor] = math.ceil(var.DOCTOR_IMMUNIZATION_MULTIPLIER * lpl)
+            var.DOCTORS[doctor.nick] = math.ceil(var.DOCTOR_IMMUNIZATION_MULTIPLIER * lpl)
 
         # Clear totem tracking; this would let someone that gets shaman twice in a row to give
         # out a totem to the same person twice in a row, but oh well
@@ -1311,8 +1213,8 @@ class MaelstromMode(GameMode):
                         continue
                     var.ORIGINAL_ROLES[r].discard(p)
                 var.ORIGINAL_ROLES[role].add(p)
-                var.FINAL_ROLES[p] = role
-                var.MAIN_ROLES[users._get(p)] = role # FIXME
+                var.FINAL_ROLES[p.nick] = role # FIXME
+                var.MAIN_ROLES[p] = role
 
     def _role_attribution(self, cli, var, villagers, do_templates):
         lpl = len(villagers) - 1
@@ -1348,7 +1250,7 @@ class MaelstromMode(GameMode):
             if count > 0:
                 for j in range(count):
                     u = users.FakeUser.from_nick(str(i + j))
-                    rolemap[role].add(u.nick)
+                    rolemap[role].add(u)
                     if role not in var.TEMPLATE_RESTRICTIONS:
                         mainroles[u] = role
                 i += count
@@ -1357,5 +1259,127 @@ class MaelstromMode(GameMode):
             return self._role_attribution(cli, var, villagers, do_templates)
 
         return addroles
+
+# someone let woffle commit while drunk again... tsk tsk
+@game_mode("mudkip", minp=4, maxp=15, likelihood=1)
+class MudkipMode(GameMode):
+    """Why are all the professors named after trees?"""
+    def __init__(self, arg=""):
+        super().__init__(arg)
+        self.ABSTAIN_ENABLED = False
+
+        # If changing totem chances, pay attention to the transition_night_begin listener as well further down
+                                              #    SHAMAN   , CRAZED SHAMAN , WOLF SHAMAN
+        self.TOTEM_CHANCES = {       "death": (      5      ,       1       ,      0      ),
+                                "protection": (      0      ,       1       ,      5      ),
+                                   "silence": (      0      ,       1       ,      0      ),
+                                 "revealing": (      0      ,       1       ,      0      ),
+                               "desperation": (      0      ,       1       ,      0      ),
+                                "impatience": (      0      ,       1       ,      0      ),
+                                  "pacifism": (      0      ,       1       ,      0      ),
+                                 "influence": (      0      ,       1       ,      0      ),
+                                "narcolepsy": (      0      ,       1       ,      0      ),
+                                  "exchange": (      0      ,       1       ,      0      ),
+                               "lycanthropy": (      0      ,       1       ,      0      ),
+                                      "luck": (      0      ,       1       ,      0      ),
+                                "pestilence": (      5      ,       1       ,      0      ),
+                               "retribution": (      0      ,       1       ,      0      ),
+                              "misdirection": (      0      ,       1       ,      5      ),
+                                    "deceit": (      0      ,       1       ,      0      ),
+                             }
+        self.ROLE_INDEX =         (  4  ,  5  ,  6  ,  7  ,  8  ,  9  , 10  , 11  , 12  , 13  , 14  , 15  )
+        self.ROLE_GUIDE = reset_roles(self.ROLE_INDEX)
+        self.ROLE_GUIDE.update({# village roles
+              "investigator"    : (  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ),
+              "guardian angel"  : (  0  ,  0  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ),
+              "shaman"          : (  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ),
+              "vengeful ghost"  : (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ),
+              "priest"          : (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  ),
+              "amnesiac"        : (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ),
+              # wolf roles
+              "wolf"            : (  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  2  ,  2  ,  2  ,  2  ,  2  ),
+              "doomsayer"       : (  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ),
+              "wolf shaman"     : (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ),
+              "minion"          : (  0  ,  1  ,  1  ,  1  ,  1  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ),
+              # neutral roles
+              "jester"          : (  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ),
+              "succubus"        : (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ),
+              # templates
+              "assassin"        : (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ),
+              })
+
+        self.recursion_guard = False
+
+    def startup(self):
+        events.add_listener("chk_decision", self.chk_decision)
+        events.add_listener("daylight_warning", self.daylight_warning)
+        events.add_listener("transition_night_begin", self.transition_night_begin)
+
+    def teardown(self):
+        events.remove_listener("chk_decision", self.chk_decision)
+        events.remove_listener("daylight_warning", self.daylight_warning)
+        events.remove_listener("transition_night_begin", self.transition_night_begin)
+
+    def chk_decision(self, evt, cli, var, force):
+        # If everyone is voting, end day here with the person with plurality being voted. If there's a tie,
+        # kill all tied players rather than hanging. The intent of this is to benefit village team in the event
+        # of a stalemate, as they could use the extra help (especially in 5p).
+        if self.recursion_guard:
+            # in here, this means we're in a child chk_decision event called from this one
+            # we need to ensure we don't turn into nighttime prematurely or try to vote
+            # anyone other than the person we're forcing the lynch on
+            evt.data["transition_night"] = lambda cli: None
+            if force:
+                evt.data["votelist"] = {force: set()}
+                evt.data["numvotes"] = {force: 0}
+            else:
+                evt.data["votelist"] = {}
+                evt.data["numvotes"] = {}
+            return
+
+        avail = len(evt.params.voters)
+        voted = sum(map(len, evt.data["votelist"].values()))
+        if (avail != voted and not evt.params.timeout) or voted == 0:
+            return
+
+        majority = avail // 2 + 1
+        maxv = max(evt.data["numvotes"].values())
+        if maxv >= majority or force:
+            # normal vote code will result in someone being lynched
+            # not bailing out here will result in the person being voted twice
+            return
+
+        # make a copy in case an event mutates it in recursive calls
+        tovote = [p for p, n in evt.data["numvotes"].items() if n == maxv]
+        self.recursion_guard = True
+        gameid = var.GAME_ID
+        last = tovote[-1]
+
+        if evt.params.timeout:
+            channels.Main.send(messages["sunset_lynch"])
+
+        from src.wolfgame import chk_decision
+        for p in tovote:
+            deadlist = tovote[:]
+            deadlist.remove(p)
+            chk_decision(cli, force=p, deadlist=deadlist, end_game=p is last)
+
+        self.recursion_guard = False
+        # gameid changes if game stops due to us voting someone
+        if var.GAME_ID == gameid:
+            evt.data["transition_night"](cli)
+
+        # make original chk_decision that called us no-op
+        evt.prevent_default = True
+
+    def daylight_warning(self, evt, var):
+        evt.data["message"] = "daylight_warning_killtie"
+
+    def transition_night_begin(self, evt, cli, var):
+        if var.FIRST_NIGHT:
+            # ensure shaman gets death totem on the first night
+            var.TOTEM_CHANCES["pestilence"] = (0, 1, 0)
+        else:
+            var.TOTEM_CHANCES["pestilence"] = (5, 1, 0)
 
 # vim: set sw=4 expandtab:

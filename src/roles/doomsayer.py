@@ -34,11 +34,14 @@ def see(cli, nick, chan, rest):
         pm(cli, nick, messages["no_see_wolf"])
         return
 
-    evt = Event("targeted_command", {"target": victim, "misdirection": True, "exchange": True})
-    evt.dispatch(cli, var, "see", nick, victim, frozenset({"detrimental", "immediate"}))
+    doomsayer = users._get(nick) # FIXME
+    target = users._get(victim) # FIXME
+
+    evt = Event("targeted_command", {"target": target, "misdirection": True, "exchange": True})
+    evt.dispatch(var, "see", doomsayer, target, frozenset({"detrimental", "immediate"}))
     if evt.prevent_default:
         return
-    victim = evt.data["target"]
+    victim = evt.data["target"].nick
     victimrole = get_role(victim)
 
     mode, mapping = random.choice(_mappings)
@@ -50,7 +53,6 @@ def see(cli, nick, chan, rest):
     relay_wolfchat_command(cli, nick, messages["doomsayer_wolfchat"].format(nick, victim), ("doomsayer",), is_wolf_command=True)
 
     SEEN.add(nick)
-    chk_nightdone(cli)
 
 @event_listener("rename_player")
 def on_rename(evt, cli, var, prefix, nick):

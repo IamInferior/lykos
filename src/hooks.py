@@ -316,11 +316,11 @@ def mode_change(cli, rawnick, chan, mode, *targets):
 
     """
 
-    actor = users._add(cli, nick=rawnick) # FIXME
     if chan == users.Bot.nick: # we only see user modes set to ourselves
         users.Bot.modes.update(mode)
         return
 
+    actor = users._add(cli, nick=rawnick) # FIXME
     target = channels.add(chan, cli)
     target.queue("mode_change", {"mode": mode, "targets": targets}, (var, actor, target))
 
@@ -498,7 +498,7 @@ def on_nick_change(cli, old_rawnick, nick):
 
     """
 
-    user = users._get(old_rawnick) # FIXME
+    user = users._get(old_rawnick, allow_bot=True) # FIXME
     user.nick = nick
 
     Event("nick_change", {}).dispatch(var, user, old_rawnick)
@@ -557,6 +557,8 @@ def join_chan(cli, rawnick, chan, account=None, realname=None):
     user = users._add(cli, nick=rawnick, realname=realname, account=account) # FIXME
     ch.users.add(user)
     user.channels[ch] = set()
+    # mark the user as here, in case they used to be connected before but left
+    user.disconnected = False
 
     if user is users.Bot:
         ch.mode()

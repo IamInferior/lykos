@@ -6,6 +6,7 @@ from collections import defaultdict, OrderedDict
 import botconfig
 
 LANGUAGE = 'en'
+
 MINIMUM_WAIT = 60
 EXTRA_WAIT = 30
 EXTRA_WAIT_JOIN = 0 # Add this many seconds to the waiting time for each !join
@@ -88,6 +89,11 @@ AUTO_SANCTION = (
         (7, 19, {"scalestasis": (0, 1, -5)}),
         (20, 20, {"tempban": 10})
         )
+
+# Send a message to deadchat or wolfchat when a user spectates them
+SPECTATE_NOTICE = True
+# Whether to include which user is doing the spectating in the message
+SPECTATE_NOTICE_USER = False
 
 # The following is a bitfield, and they can be mixed together
 # Defaults to none of these, can be changed on a per-game-mode basis
@@ -187,6 +193,13 @@ ACCOUNTS_ONLY = False # If True, will use only accounts for everything
 DISABLE_ACCOUNTS = False # If True, all account-related features are disabled. Automatically set if we discover we do not have proper ircd support for accounts
                         # This will override ACCOUNTS_ONLY if it is set
 
+SSL_VERIFY = True
+SSL_CERTFP = ()
+# Tracking Mozilla's "intermediate" compatibility list -- https://wiki.mozilla.org/Security/Server_Side_TLS#Intermediate_compatibility_.28default.29
+SSL_CIPHERS = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS"
+SSL_CERTFILE = None
+SSL_KEYFILE = None
+
 NICKSERV = "NickServ"
 NICKSERV_IDENTIFY_COMMAND = "IDENTIFY {account} {password}"
 NICKSERV_GHOST_COMMAND = "GHOST {nick}"
@@ -249,6 +262,7 @@ ROLE_GUIDE = OrderedDict([ # This is order-sensitive - many parts of the code re
              ("vigilante"        , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
              ("augur"            , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  )),
              ("detective"        , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  )),
+             ("investigator"     , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
              ("prophet"          , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
              ("guardian angel"   , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
              ("bodyguard"        , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  1  ,  1  ,  1  ,  1  ,  1  )),
@@ -345,7 +359,7 @@ ROLE_COMMAND_EXCEPTIONS = set()
 
 GIF_CHANCE = 1/50
 
-ALL_FLAGS = frozenset("AaDdFgjmNSsw")
+ALL_FLAGS = frozenset("AaDdFgjmNpSsw")
 
 GRAVEYARD_LOCK = threading.RLock()
 WARNING_LOCK = threading.RLock()

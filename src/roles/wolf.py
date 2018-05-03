@@ -45,6 +45,8 @@ def wolf_kill(cli, nick, chan, rest):
     nevt.dispatch(var)
     num_kills = nevt.data["numkills"]
 
+    wolf = users._get(nick) # FIXME
+
     i = 0
     extra = 0
     while i < num_kills + extra:
@@ -67,11 +69,14 @@ def wolf_kill(cli, nick, chan, rest):
             pm(cli, nick, messages["wolf_no_target_wolf"])
             return
         orig.append(victim)
-        evt = Event("targeted_command", {"target": victim, "misdirection": True, "exchange": True})
-        evt.dispatch(cli, var, "kill", nick, victim, frozenset({"detrimental"}))
+
+        target = users._get(victim) # FIXME
+
+        evt = Event("targeted_command", {"target": target, "misdirection": True, "exchange": True})
+        evt.dispatch(var, "kill", wolf, target, frozenset({"detrimental"}))
         if evt.prevent_default:
             return
-        victim = evt.data["target"]
+        victim = evt.data["target"].nick
         victims.append(victim)
         i += 1
 
@@ -93,7 +98,6 @@ def wolf_kill(cli, nick, chan, rest):
 
     if in_wolflist(nick, nick):
         relay_wolfchat_command(cli, nick, msg, var.WOLF_ROLES, is_wolf_command=True, is_kill_command=True)
-    chk_nightdone(cli)
 
 @cmd("retract", "r", chan=False, pm=True, playing=True, phases=("night",))
 def wolf_retract(cli, nick, chan, rest):
@@ -102,7 +106,7 @@ def wolf_retract(cli, nick, chan, rest):
         del KILLS[nick]
         pm(cli, nick, messages["retracted_kill"])
         relay_wolfchat_command(cli, nick, messages["wolfchat_retracted_kill"].format(nick), var.WOLF_ROLES, is_wolf_command=True, is_kill_command=True)
-    if nick in var.ROLES["alpha wolf"] and nick in var.BITE_PREFERENCES:
+    if users._get(nick) in var.ROLES["alpha wolf"] and nick in var.BITE_PREFERENCES: # FIXME
         del var.BITE_PREFERENCES[nick]
         var.ALPHA_WOLVES.remove(nick)
         pm(cli, nick, messages["no_bite"])
@@ -218,7 +222,7 @@ def on_transition_day6(evt, var):
 @event_listener("retribution_kill")
 def on_retribution_kill(evt, var, victim, orig_target):
     if evt.data["target"] == "@wolves":
-        wolves = get_players(var.WOLF_ROLES)
+        wolves = get_players(CAN_KILL)
         evt.data["target"] = random.choice(wolves)
 
 @event_listener("exchange_roles", priority=2)
@@ -414,7 +418,7 @@ def on_transition_night_end(evt, var):
         elif role == "warlock":
             # warlock specifically only sees cursed if they're not in wolfchat
             for player in pl:
-                if player.nick in var.ROLES["cursed villager"]: # FIXME: Once var.ROLES holds User instances
+                if player in var.ROLES["cursed villager"]:
                     players.append(player.nick + " (cursed)")
                 else:
                     players.append(player.nick)
@@ -427,14 +431,14 @@ def on_transition_night_end(evt, var):
             wolf.send(messages["wolf_bite"])
 
 @event_listener("succubus_visit")
-def on_succubus_visit(evt, cli, var, nick, victim):
-    if var.ROLES["succubus"].intersection(KILLS.get(victim, ())):
-        for s in var.ROLES["succubus"]:
-            if s in KILLS[victim]:
-                pm(cli, victim, messages["no_kill_succubus"].format(nick))
-                KILLS[victim].remove(s)
-        if not KILLS[victim]:
-            del KILLS[victim]
+def on_succubus_visit(evt, var, succubus, target):
+    if get_all_players(("succubus",)).intersection(users._get(x) for x in KILLS.get(target.nick, ())): # FIXME: once KILLS holds User instances
+        for s in get_all_players(("succubus",)):
+            if s.nick in KILLS[target.nick]:
+                target.send(messages["no_kill_succubus"].format(succubus))
+                KILLS[target.nick].remove(s.nick)
+        if not KILLS[target.nick]:
+            del KILLS[target.nick]
 
 @event_listener("begin_day")
 def on_begin_day(evt, var):

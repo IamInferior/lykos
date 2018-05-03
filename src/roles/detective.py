@@ -26,11 +26,14 @@ def investigate(cli, nick, chan, rest):
         pm(cli, nick, messages["no_investigate_self"])
         return
 
-    evt = Event("targeted_command", {"target": victim, "misdirection": True, "exchange": True})
-    evt.dispatch(cli, var, "see", nick, victim, frozenset({"info", "immediate"}))
+    det = users._get(nick) # FIXME
+    target = users._get(victim) # FIXME
+
+    evt = Event("targeted_command", {"target": target, "misdirection": True, "exchange": True})
+    evt.dispatch(var, "identify", det, target, frozenset({"info", "immediate"}))
     if evt.prevent_default:
         return
-    victim = evt.data["target"]
+    victim = evt.data["target"].nick
     vrole = get_role(victim)
     if vrole == "amnesiac":
         vrole = var.AMNESIAC_ROLES[victim]
@@ -52,7 +55,7 @@ def investigate(cli, nick, chan, rest):
             else:
                 wcroles = var.WOLF_ROLES | {"traitor"}
 
-        mass_privmsg(cli, list_players(wcroles), messages["investigator_reveal"].format(nick))
+        mass_privmsg(cli, list_players(wcroles), messages["detective_reveal"].format(nick))
         debuglog("{0} ({1}) PAPER DROP".format(nick, get_role(nick)))
 
 @event_listener("rename_player")
@@ -79,7 +82,7 @@ def on_exchange(evt, var, actor, target, actor_role, target_role):
 @event_listener("transition_night_end", priority=2)
 def on_transition_night_end(evt, var):
     ps = get_players()
-    for dttv in get_all_players(("detective",)):
+    for dttv in var.ROLES["detective"]:
         pl = ps[:]
         random.shuffle(pl)
         pl.remove(dttv)

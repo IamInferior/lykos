@@ -4,18 +4,16 @@ import re
 
 import botconfig
 import src.settings as var
-from src import proxy, debuglog
+from src import debuglog
 from src.events import Event
 from src.messages import messages
 
 __all__ = ["pm", "is_fake_nick", "mass_mode", "mass_privmsg", "reply",
            "is_user_simple", "is_user_notice", "in_wolflist",
-           "relay_wolfchat_command", "chk_nightdone", "chk_decision",
-           "chk_win", "irc_lower", "irc_equals", "is_role", "match_hostmask",
+           "relay_wolfchat_command", "irc_lower", "irc_equals", "match_hostmask",
            "is_owner", "is_admin", "plural", "singular", "list_players",
-           "list_players_and_roles", "get_role", "get_roles",
-           "get_reveal_role", "get_templates", "change_role", "role_order", "break_long_message",
-           "complete_match","complete_one_match", "get_victim", "get_nick", "InvalidModeException"]
+           "get_role", "get_roles", "change_role", "role_order", "break_long_message",
+           "complete_match", "complete_one_match", "get_victim", "InvalidModeException"]
 # message either privmsg or notice, depending on user settings
 def pm(cli, target, message):
     if is_fake_nick(target) and botconfig.DEBUG_MODE:
@@ -170,19 +168,10 @@ def relay_wolfchat_command(cli, nick, message, roles, is_wolf_command=False, is_
     wcwolves = list_players(wcroles)
     wcwolves.remove(nick)
     mass_privmsg(cli, wcwolves, message)
-    mass_privmsg(cli, var.SPECTATING_WOLFCHAT, "[wolfchat] " + message)
-
-@proxy.stub
-def chk_nightdone(cli):
-    pass
-
-@proxy.stub
-def chk_decision(cli, force=""):
-    pass
-
-@proxy.stub
-def chk_win(cli, end_game=True, winner=None):
-    pass
+    for player in var.SPECTATING_WOLFCHAT:
+        player.queue_message("[wolfchat] " + message)
+    if var.SPECTATING_WOLFCHAT:
+        player.send_messages()
 
 def irc_lower(nick):
     if nick is None:
@@ -207,8 +196,6 @@ def irc_lower(nick):
 
 def irc_equals(nick1, nick2):
     return irc_lower(nick1) == irc_lower(nick2)
-
-is_role = lambda plyr, rol: rol in var.ROLES and plyr in var.ROLES[rol]
 
 def match_hostmask(hostmask, nick, ident, host):
     # support n!u@h, u@h, or just h by itself
@@ -313,27 +300,11 @@ def list_players(roles=None, *, mainroles=None):
     from src.functions import get_players
     return [p.nick for p in get_players(roles, mainroles=mainroles)]
 
-def list_players_and_roles():
-    # TODO DEPRECATED: replace with iterating over var.MAIN_ROLES directly
-    # (and working with user objects instead of nicks)
-    return {u.nick: r for u, r in var.MAIN_ROLES.items()}
-
 def get_role(p):
-    # FIXME: make the arg a user instead of a nick
+    # TODO DEPRECATED: replace with get_main_role(user)
     from src import users
-    from src.functions import get_participants
-    user = users._get(p)
-    role = var.MAIN_ROLES.get(user, None)
-    if role is not None:
-        return role
-    # not found in player list, see if they're a special participant
-    if user in get_participants():
-        evt = Event("get_participant_role", {"role": None})
-        evt.dispatch(var, user)
-        role = evt.data["role"]
-    if role is None:
-        raise ValueError("User {0} isn't playing and has no defined participant role".format(user))
-    return role
+    from src.functions import get_main_role
+    return get_main_role(users._get(p))
 
 def get_roles(*roles, rolemap=None):
     if rolemap is None:
@@ -341,45 +312,12 @@ def get_roles(*roles, rolemap=None):
     all_roles = []
     for role in roles:
         all_roles.append(rolemap[role])
-    return list(itertools.chain(*all_roles))
+    return [u.nick for u in itertools.chain(*all_roles)]
 
-def get_reveal_role(nick):
-    # FIXME: make the arg a user instead of a nick
-    from src import users
-    if var.HIDDEN_AMNESIAC and nick in var.ORIGINAL_ROLES["amnesiac"]:
-        role = "amnesiac"
-    elif var.HIDDEN_CLONE and nick in var.ORIGINAL_ROLES["clone"]:
-        role = "clone"
-    else:
-        role = get_role(nick)
-
-    evt = Event("get_reveal_role", {"role": role})
-    evt.dispatch(var, users._get(nick))
-    role = evt.data["role"]
-
-    if var.ROLE_REVEAL != "team":
-        return role
-
-    if role in var.WOLFTEAM_ROLES:
-        return "wolfteam player"
-    elif role in var.TRUE_NEUTRAL_ROLES:
-        return "neutral player"
-    else:
-        return "village member"
-
-def get_templates(nick):
-    # FIXME: make the arg a user instead of a nick
-    mainrole = get_role(nick)
-    tpl = []
-    for role, nicks in var.ROLES.items():
-        if nick in nicks and role != mainrole:
-            tpl.append(role)
-
-    return tpl
-
+# TODO: move this to functions.py
 def change_role(user, oldrole, newrole, set_final=True):
-    var.ROLES[oldrole].remove(user.nick)
-    var.ROLES[newrole].add(user.nick)
+    var.ROLES[oldrole].remove(user)
+    var.ROLES[newrole].add(user)
     # only adjust MAIN_ROLES/FINAL_ROLES if we're changing the user's actual role
     if var.MAIN_ROLES[user] == oldrole:
         var.MAIN_ROLES[user] = newrole
@@ -422,6 +360,7 @@ def complete_one_match(string, matches):
 
 #wrapper around complete_match() used for roles
 def get_victim(cli, nick, victim, in_chan, self_in_list=False, bot_in_list=False):
+    from src import users
     chan = botconfig.CHANNEL if in_chan else nick
     if not victim:
         reply(cli, nick, chan, messages["not_enough_parameters"], private=True)
@@ -430,8 +369,8 @@ def get_victim(cli, nick, victim, in_chan, self_in_list=False, bot_in_list=False
     pll = [x.lower() for x in pl]
 
     if bot_in_list: # for villagergame
-        pl.append(botconfig.NICK)
-        pll.append(botconfig.NICK.lower())
+        pl.append(users.Bot.nick)
+        pll.append(users.Bot.nick.lower())
 
     tempvictims = complete_match(victim.lower(), pll)
     if len(tempvictims) != 1:
@@ -441,15 +380,6 @@ def get_victim(cli, nick, victim, in_chan, self_in_list=False, bot_in_list=False
         reply(cli, nick, chan, messages["not_playing"].format(victim), private=True)
         return
     return pl[pll.index(tempvictims.pop())] #convert back to normal casing
-
-# wrapper around complete_match() used for any nick on the channel
-def get_nick(cli, nick):
-    ul = [x for x in var.USERS]
-    ull = [x.lower() for x in var.USERS]
-    lnick = complete_match(nick.lower(), ull)
-    if not lnick:
-        return None
-    return ul[ull.index(lnick)]
 
 class InvalidModeException(Exception): pass
 

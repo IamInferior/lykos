@@ -12,13 +12,10 @@ import botconfig
 import src.settings as var
 from src import decorators, wolfgame, events, channels, hooks, users, errlog as log, stream_handler as alog
 from src.messages import messages
-from src.utilities import reply, get_role, get_templates
+from src.utilities import reply
 from src.functions import get_participants, get_all_roles
 from src.dispatcher import MessageDispatcher
-from src.decorators import handle_error
-
-cmd = decorators.cmd
-hook = decorators.hook
+from src.decorators import handle_error, command, hook
 
 @handle_error
 def on_privmsg(cli, rawnick, chan, msg, *, notice=False, force_role=None):
@@ -132,14 +129,14 @@ def unhandled(cli, prefix, cmd, *args):
 def ping_server(cli):
     cli.send("PING :{0}".format(time.time()))
 
-@cmd("latency", pm=True)
-def latency(cli, nick, chan, rest):
-    ping_server(cli)
+@command("latency", pm=True)
+def latency(var, wrapper, message):
+    ping_server(wrapper.client)
 
     @hook("pong", hookid=300)
     def latency_pong(cli, server, target, ts):
         lat = round(time.time() - float(ts), 3)
-        reply(cli, nick, chan, messages["latency"].format(lat, "" if lat == 1 else "s"))
+        wrapper.reply(messages["latency"].format(lat, "" if lat == 1 else "s"))
         hook.unhook(300)
 
 def connect_callback(cli):
@@ -241,42 +238,69 @@ def connect_callback(cli):
         request_caps.add("sasl")
 
     supported_caps = set()
+    supported_sasl = None
+    selected_sasl = None
 
     @hook("cap")
-    def on_cap(cli, svr, mynick, cmd, caps, star=None):
+    def on_cap(cli, svr, mynick, cmd, *caps):
+        nonlocal supported_sasl, selected_sasl
+        # caps is a star because we might receive multiline in LS
         if cmd == "LS":
-            if caps == "*":
-                # Multi-line LS
-                supported_caps.update(star.split())
-            else:
-                supported_caps.update(caps.split())
+            for item in caps[-1].split(): # First item may or may not be *, for multiline
+                try:
+                    key, value = item.split("=", 1)
+                except ValueError:
+                    key = item
+                    value = None
+                supported_caps.add(key)
+                if key == "sasl" and value is not None:
+                    supported_sasl = set(value.split(","))
 
-                if botconfig.SASL_AUTHENTICATION and "sasl" not in supported_caps:
-                    alog("Server does not support SASL authentication")
-                    cli.quit()
+            if caps[0] == "*": # Multiline, don't continue yet
+                return
 
-                common_caps = request_caps & supported_caps
+            if botconfig.SASL_AUTHENTICATION and "sasl" not in supported_caps:
+                alog("Server does not support SASL authentication")
+                cli.quit()
+                raise ValueError("Server does not support SASL authentication")
 
-                if common_caps:
-                    cli.send("CAP REQ " ":{0}".format(" ".join(common_caps)))
+            common_caps = request_caps & supported_caps
+
+            if common_caps:
+                cli.send("CAP REQ " ":{0}".format(" ".join(common_caps)))
+
         elif cmd == "ACK":
-            if "sasl" in caps:
-                cli.send("AUTHENTICATE PLAIN")
+            if "sasl" in caps[0]:
+                if var.SSL_CERTFILE:
+                    mech = "EXTERNAL"
+                else:
+                    mech = "PLAIN"
+                selected_sasl = mech
+
+                if supported_sasl is None or mech in supported_sasl:
+                    cli.send("AUTHENTICATE {0}".format(mech))
+                else:
+                    alog("Server does not support the SASL {0} mechanism".format(mech))
+                    cli.quit()
+                    raise ValueError("Server does not support the SASL {0} mechanism".format(mech))
             else:
                 cli.send("CAP END")
         elif cmd == "NAK":
             # This isn't supposed to happen. The server claimed to support a
             # capability but now claims otherwise.
-            alog("Server refused capabilities: {0}".format(" ".join(caps)))
+            alog("Server refused capabilities: {0}".format(" ".join(caps[0])))
 
     if botconfig.SASL_AUTHENTICATION:
         @hook("authenticate")
         def auth_plus(cli, something, plus):
             if plus == "+":
-                account = (botconfig.USERNAME or botconfig.NICK).encode("utf-8")
-                password = botconfig.PASS.encode("utf-8")
-                auth_token = base64.b64encode(b"\0".join((account, account, password))).decode("utf-8")
-                cli.send("AUTHENTICATE " + auth_token)
+                if selected_sasl == "EXTERNAL":
+                    cli.send("AUTHENTICATE +")
+                elif selected_sasl == "PLAIN":
+                    account = (botconfig.USERNAME or botconfig.NICK).encode("utf-8")
+                    password = botconfig.PASS.encode("utf-8")
+                    auth_token = base64.b64encode(b"\0".join((account, account, password))).decode("utf-8")
+                    cli.send("AUTHENTICATE " + auth_token, log="AUTHENTICATE [redacted]")
 
         @hook("903")
         def on_successful_auth(cli, blah, blahh, blahhh):
@@ -287,9 +311,16 @@ def connect_callback(cli):
         @hook("906")
         @hook("907")
         def on_failure_auth(cli, *etc):
-            alog("Authentication failed.  Did you fill the account name "
-                 "in botconfig.USERNAME if it's different from the bot nick?")
-            cli.quit()
+            nonlocal selected_sasl
+            if selected_sasl == "EXTERNAL" and (supported_sasl is None or "PLAIN" in supported_sasl):
+                # EXTERNAL failed, retry with PLAIN as we may not have set up the client cert yet
+                selected_sasl = "PLAIN"
+                alog("EXTERNAL auth failed, retrying with PLAIN... ensure the client cert is set up in NickServ")
+                cli.send("AUTHENTICATE PLAIN")
+            else:
+                alog("Authentication failed.  Did you fill the account name "
+                     "in botconfig.USERNAME if it's different from the bot nick?")
+                cli.quit()
 
     users.Bot = users.BotUser(cli, botconfig.NICK)
 
