@@ -679,7 +679,7 @@
     "dullahan_simple": "You are a \u0002dullahan\u0002.",
     "dullahan_targets": "Targets: ",
     "dullahan_remaining_targets": "Remaining targets: ",
-    "succubus_notify": "You are a \u0002succubus\u0002. You may entrance someone and make them follow you by visiting them at night. If all alive players are entranced, you win. Use \"visit <nick>\" to visit a player or \"pass\" to stay home. If you visit the victim of the wolves, you will die.",
+    "succubus_notify": "You are a \u0002succubus\u0002. You may entrance someone and make them follow you by visiting them at night. You may have one living player entranced at a time. If all alive players are entranced, you win. Use \"visit <nick>\" to visit a player or \"pass\" to stay home. If you visit the victim of the wolves, you will die. If you visit a wolf and you already have a player entranced, you will die.",
     "succubus_simple": "You are a \u0002succubus\u0002.",
     "vigilante_notify": "You are a \u0002vigilante\u0002. Each night, you may kill someone by using \"kill <nick>\", or \"pass\" to pass. If the person you kill is not a wolf or a win stealer, you will die alongside your victim.",
     "vigilante_simple": "You are a \u0002vigilante\u0002.",

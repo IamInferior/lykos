@@ -15,7 +15,7 @@ PASSED = set() # type: Set[users.User]
 
 @command("kill", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("vigilante",))
 def vigilante_kill(var, wrapper, message):
-    """Kill someone at night, but you die too if they aren't a wolf or win stealer!"""
+    """Kill someone at night, but you die too if they aren't a wolf, jester, or win stealer!"""
 
     target = get_target(var, wrapper, re.split(" +", message)[0], not_self_message="no_suicide")
 
@@ -91,7 +91,7 @@ def on_transition_day(evt, var):
         # important, otherwise our del_player listener lets hunter kill again
         del KILLS[vigilante]
 
-        if get_main_role(target) not in var.WOLF_ROLES | var.WIN_STEALER_ROLES:
+        if get_main_role(target) not in (var.WOLF_ROLES | var.WIN_STEALER_ROLES | var.VIG_CAN_KILL_ROLES):
             var.DYING.add(vigilante)
 
 @event_listener("exchange_roles")

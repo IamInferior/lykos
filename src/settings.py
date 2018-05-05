@@ -321,6 +321,8 @@ HIDDEN_VILLAGERS = frozenset({"time lord"})
 HIDDEN_ROLES = frozenset({"vengeful ghost", "amnesiac"})
 # These roles are win stealers, and are valid kills for vigilante
 WIN_STEALER_ROLES = frozenset({"monster", "succubus", "demoniac", "piper", "fool"})
+# These roles are valid kills for the vigilante as well
+VIG_CAN_KILL_ROLES = frozenset({"jester"})
 
 # these totems are beneficial for the *receiving* person, but can be detrimental to someone else acting on the receiver!
 BENEFICIAL_TOTEMS = frozenset({"protection", "revealing", "desperation", "influence", "luck", "pestilence", "retribution"})
