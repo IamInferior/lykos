@@ -184,6 +184,7 @@ TOTEM_CHANCES = {       "death": (      1      ,        1        ,       0      
                   "retribution": (      0      ,        1        ,       1       ),
                  "misdirection": (      0      ,        1        ,       1       ),
                        "deceit": (      0      ,        1        ,       1       ),
+                   "do nothing": (      0      ,        0        ,       0       )
                 }
 
 GAME_MODES = {}
