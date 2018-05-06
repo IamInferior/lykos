@@ -29,10 +29,10 @@ SHARPSHOOTER_MULTIPLIER = 0.06
 MIN_PLAYERS = 4
 MAX_PLAYERS = 24
 DRUNK_SHOTS_MULTIPLIER = 3
-NIGHT_TIME_LIMIT = 120
-NIGHT_TIME_WARN = 90  # should be less than NIGHT_TIME_LIMIT
-DAY_TIME_LIMIT = 720
-DAY_TIME_WARN = 600   # should be less than DAY_TIME_LIMIT
+NIGHT_TIME_LIMIT = 180
+NIGHT_TIME_WARN = 120  # should be less than NIGHT_TIME_LIMIT
+DAY_TIME_LIMIT = 480
+DAY_TIME_WARN = 420   # should be less than DAY_TIME_LIMIT
 JOIN_TIME_LIMIT = 3600
 # May only be set if the above are also set
 SHORT_DAY_PLAYERS = 6 # Number of players left to have a short day
@@ -51,7 +51,7 @@ QUIT_GRACE_TIME = 60
 ACC_GRACE_TIME = 30
 START_QUIT_DELAY = 10
 #  controls how many people it does in one /msg; only works for messages that are the same
-MAX_PRIVMSG_TARGETS = 4
+MAX_PRIVMSG_TARGETS = 9
 # how many mode values can be specified at once; used only as fallback
 MODELIMIT = 3
 QUIET_DEAD_PLAYERS = False
@@ -184,6 +184,7 @@ TOTEM_CHANCES = {       "death": (      1      ,        1        ,       0      
                   "retribution": (      0      ,        1        ,       1       ),
                  "misdirection": (      0      ,        1        ,       1       ),
                        "deceit": (      0      ,        1        ,       1       ),
+                   "do nothing": (      0      ,        0        ,       0       )
                 }
 
 GAME_MODES = {}

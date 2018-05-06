@@ -13,7 +13,6 @@ __pycache__/
 
 # Config files
 botconfig.py
-/gamemodes.py
 /messages.json
 /roles/*.py
 

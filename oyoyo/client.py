@@ -109,7 +109,7 @@ class IRCClient:
         self.lock = threading.RLock()
         self.stream_handler = lambda output, level=None: print(output)
 
-        self.tokenbucket = TokenBucket(23, 1.73)
+        self.tokenbucket = TokenBucket(10, 0.6)
 
         self.__dict__.update(kwargs)
         self.command_handler = cmd_handler
