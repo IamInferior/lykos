@@ -88,7 +88,6 @@ def on_transition_day_resolve_end(evt, var, victims):
 
 @event_listener("transition_day_resolve_end", priority=3)
 def on_transition_day_resolve_end3(evt, var, victims):
-    from src.roles import succubus
     for harlot in get_all_players(("harlot",)):
         if VISITED.get(harlot) in get_players(var.WOLF_ROLES) and harlot not in evt.data["dead"] and harlot not in evt.data["bitten"]:
             evt.data["message"].append(messages["harlot_visited_wolf"].format(harlot))
