@@ -24,3 +24,6 @@ botconfig.py
 
 # Certificates/keys
 *.pem
+
+#start script
+startbot.bat

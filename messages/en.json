@@ -286,6 +286,7 @@
     "visited_victim_noreveal": "\u0002{0}\u0002 made the unfortunate mistake of visiting the victim's house last night and is now dead.",
     "no_victims_append": " All villagers, however, have survived.",
     "harlot_visited_wolf": "\u0002{0}\u0002, a \u0002harlot\u0002, made the unfortunate mistake of visiting a wolf's house last night and is now dead.",
+    "succubus_visited_wolf": "\u0002{0}\u0002, a \u0002succubus\u0002, made the unfortunate mistake of visiting a wolf's house last night and is now dead.",
     "bodyguard_protected_wolf": "\u0002{0}\u0002, a \u0002bodyguard\u0002, made the unfortunate mistake of guarding a wolf last night, and is now dead.",
     "bodyguard_protected_wolf_no_reveal": "\u0002{0}\u0002 made the unfortunate mistake of guarding a wolf last night, and is now dead.",
     "guardian_angel_protected_wolf": "\u0002{0}\u0002, a \u0002guardian angel\u0002, made the unfortunate mistake of guarding a wolf last night, and is now dead.",

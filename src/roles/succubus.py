@@ -96,7 +96,7 @@ def pass_cmd(var, wrapper, message):
 
 @event_listener("harlot_visit")
 def on_harlot_visit(evt, var, harlot, victim):
-    if victim in get_all_players(("succubus",)):
+    if victim in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num:
         harlot.send(messages["notify_succubus_target"].format(victim))
         victim.send(messages["succubus_harlot_success"].format(harlot))
         ENTRANCED.add(harlot)
@@ -185,6 +185,7 @@ def on_can_exchange(evt, var, actor, target):
 @event_listener("del_player")
 def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
     global ALL_SUCC_IDLE
+    global ENTRANCED_ALIVE_NUM
 
     entranced_alive = ENTRANCED.difference(evt.params.deadlist).intersection(evt.data["pl"])
     ENTRANCED_ALIVE_NUM = len(entranced_alive)
@@ -273,7 +274,7 @@ def on_transition_day_resolve_end3(evt, var, victims):
     for succ in get_all_players(("succubus",)):
         if VISITED.get(succ) in get_players(var.WOLF_ROLES) and succ not in evt.data["dead"] and succ not in evt.data["bitten"]:
             if(VISITED.get(succ) not in ENTRANCED):
-                evt.data["message"].append(messages["harlot_visited_wolf"].format(succ))
+                evt.data["message"].append(messages["succubus_visited_wolf"].format(succ))
                 evt.data["bywolves"].add(succ)
                 evt.data["onlybywolves"].add(succ)
                 evt.data["dead"].append(succ)

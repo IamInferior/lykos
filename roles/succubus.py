@@ -22,6 +22,7 @@ ENTRANCED_ALIVE_NUM = 0
 
 @command("visit", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("succubus",))
 def hvisit(var, wrapper, message):
+    global ENTRANCED_ALIVE_NUM
     """Entrance a player, converting them to your team."""
     if VISITED.get(wrapper.source):
         wrapper.send(messages["succubus_already_visited"].format(VISITED[wrapper.source]))
@@ -95,7 +96,7 @@ def pass_cmd(var, wrapper, message):
 
 @event_listener("harlot_visit")
 def on_harlot_visit(evt, var, harlot, victim):
-    if victim in get_all_players(("succubus",)):
+    if victim in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num:
         harlot.send(messages["notify_succubus_target"].format(victim))
         victim.send(messages["succubus_harlot_success"].format(harlot))
         ENTRANCED.add(harlot)
@@ -272,7 +273,7 @@ def on_transition_day_resolve_end3(evt, var, victims):
     for succ in get_all_players(("succubus",)):
         if VISITED.get(succ) in get_players(var.WOLF_ROLES) and succ not in evt.data["dead"] and succ not in evt.data["bitten"]:
             if(VISITED.get(succ) not in ENTRANCED):
-                evt.data["message"].append(messages["harlot_visited_wolf"].format(succ))
+                evt.data["message"].append(messages["succubus_visited_wolf"].format(succ))
                 evt.data["bywolves"].add(succ)
                 evt.data["onlybywolves"].add(succ)
                 evt.data["dead"].append(succ)
