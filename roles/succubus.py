@@ -271,7 +271,7 @@ def on_transition_day_resolve_end(evt, var, victims):
 def on_transition_day_resolve_end3(evt, var, victims):
     for succ in get_all_players(("succubus",)):
         if VISITED.get(succ) in get_players(var.WOLF_ROLES) and succ not in evt.data["dead"] and succ not in evt.data["bitten"]:
-            if(VISITED.get(succ) not in succubus.ENTRANCED):
+            if(VISITED.get(succ) not in ENTRANCED):
                 evt.data["message"].append(messages["harlot_visited_wolf"].format(succ))
                 evt.data["bywolves"].add(succ)
                 evt.data["onlybywolves"].add(succ)
