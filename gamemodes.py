@@ -61,31 +61,31 @@ class dubslavMode(GameMode):
               "harlot"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
               "shaman"          : (   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ),
               "vigilante"       : (   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ),
-	      "hunter"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   ),
+	            "hunter"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   ),
               "guardian angel"  : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ),
-	      "village drunk"   : (   0   ,   0   ,   0   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ),
+	            "village drunk"   : (   0   ,   0   ,   0   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ),
               # wolf roles
               "wolf"            : (   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   ,   1   ,   1   ,   1   ,   2   ,   3   ),
               "traitor"         : (   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
               "werecrow"        : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ),
               "wolf shaman"     : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ),
-              "cultist"         : (   0   ,   0   ,   0   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ),
-	      "minion"          : (   0   ,   0   ,   0   ,   0   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ),
+              "cultist"         : (   0   ,   0   ,   0   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   0   ),
+	            "minion"          : (   0   ,   0   ,   0   ,   0   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ),
               # neutral roles
               "fool"            : (   0   ,   1   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ),
-	      "jester"          : (   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
               "monster"         : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ),
-	      "crazed shaman"   : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
-	      "succubus"        : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+	            "crazed shaman"   : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+	            "succubus"        : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "wild child"      : (   0   ,   0   ,   0   ,   0   ,   1   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ),
               # templates
-              "cursed villager" : (   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   ,   2   ),
+              "cursed villager" : (   0   ,   0   ,   1   ,   2   ,   2   ,   2   ,   2   ,   2   ,   2   ,   2   ,   2   ,   2   ,   3   ,   3   ),
               "gunner"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   2   ,   2   ),
-	      "sharpshooter"    : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   )
+	            "sharpshooter"    : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   )
               })
 
     def transition_night_begin(self, evt, cli, var):
         if var.FIRST_NIGHT:
-            # ensure shaman gets death totem on the first night
+            # ensure shaman gets protection totem on the first night
             var.TOTEM_CHANCES["protection"] = (100, 1, 0)
         else:
             var.TOTEM_CHANCES["protection"] = (0, 1, 0)
