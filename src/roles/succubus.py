@@ -22,6 +22,7 @@ ENTRANCED_ALIVE_NUM = 0
 
 @command("visit", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("succubus",))
 def hvisit(var, wrapper, message):
+    global ENTRANCED_ALIVE_NUM
     """Entrance a player, converting them to your team."""
     if VISITED.get(wrapper.source):
         wrapper.send(messages["succubus_already_visited"].format(VISITED[wrapper.source]))
