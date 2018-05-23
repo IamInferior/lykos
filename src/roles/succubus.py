@@ -18,11 +18,9 @@ ENTRANCED_DYING = set() # type: Set[users.User]
 VISITED = {} # type: Dict[users.User, users.User]
 PASSED = set() # type: Set[users.User]
 ALL_SUCC_IDLE = True
-ENTRANCED_ALIVE_NUM = 0
 
 @command("visit", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("succubus",))
 def hvisit(var, wrapper, message):
-    global ENTRANCED_ALIVE_NUM
     """Entrance a player, converting them to your team."""
     if VISITED.get(wrapper.source):
         wrapper.send(messages["succubus_already_visited"].format(VISITED[wrapper.source]))
@@ -41,25 +39,20 @@ def hvisit(var, wrapper, message):
 
     VISITED[wrapper.source] = target
     PASSED.discard(wrapper.source)
-    succ_num = len(get_all_players(("succubus",)))
 
-    if target not in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num:
+    if target not in get_all_players(("succubus",)):
         ENTRANCED.add(target)
         wrapper.send(messages["succubus_target_success"].format(target))
     else:
         wrapper.send(messages["harlot_success"].format(target))
 
     if wrapper.source is not target:
-        if target not in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num:
+        if target not in get_all_players(("succubus",)):
             target.send(messages["notify_succubus_target"].format(wrapper.source))
-            ENTRANCED_ALIVE_NUM = ENTRANCED_ALIVE_NUM + 1
         else:
             target.send(messages["harlot_success"].format(wrapper.source))
 
         revt = Event("succubus_visit", {})
-        if ENTRANCED_ALIVE_NUM > succ_num:
-            revt = Event("harlot_visit", {})
-
         revt.dispatch(var, wrapper.source, target)
 
         # TODO: split these into assassin, hag, and alpha wolf when they are split off
@@ -96,7 +89,7 @@ def pass_cmd(var, wrapper, message):
 
 @event_listener("harlot_visit")
 def on_harlot_visit(evt, var, harlot, victim):
-    if victim in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num:
+    if victim in get_all_players(("succubus",)):
         harlot.send(messages["notify_succubus_target"].format(victim))
         victim.send(messages["succubus_harlot_success"].format(harlot))
         ENTRANCED.add(harlot)
@@ -185,14 +178,8 @@ def on_can_exchange(evt, var, actor, target):
 @event_listener("del_player")
 def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
     global ALL_SUCC_IDLE
-    global ENTRANCED_ALIVE_NUM
-
-    entranced_alive = ENTRANCED.difference(evt.params.deadlist).intersection(evt.data["pl"])
-    ENTRANCED_ALIVE_NUM = len(entranced_alive)
-
     if "succubus" not in allroles:
         return
-
     if user in VISITED:
         # if it's night, also unentrance the person they visited
         if var.PHASE == "night" and var.GAMEPHASE == "night":
@@ -209,6 +196,7 @@ def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
     if death_triggers:
         ALL_SUCC_IDLE = False
     if not get_all_players(("succubus",)):
+        entranced_alive = ENTRANCED.difference(evt.params.deadlist).intersection(evt.data["pl"])
         if ALL_SUCC_IDLE:
             while ENTRANCED:
                 e = ENTRANCED.pop()
@@ -268,16 +256,6 @@ def on_transition_day_resolve_end(evt, var, victims):
                     evt.data["bywolves"].add(succubus)
                     evt.data["onlybywolves"].add(succubus)
                     evt.data["dead"].append(succubus)
-
-@event_listener("transition_day_resolve_end", priority=3)
-def on_transition_day_resolve_end3(evt, var, victims):
-    for succ in get_all_players(("succubus",)):
-        if VISITED.get(succ) in get_players(var.WOLF_ROLES) and succ not in evt.data["dead"] and succ not in evt.data["bitten"]:
-            if(VISITED.get(succ) not in ENTRANCED):
-                evt.data["message"].append(messages["succubus_visited_wolf"].format(succ))
-                evt.data["bywolves"].add(succ)
-                evt.data["onlybywolves"].add(succ)
-                evt.data["dead"].append(succ)
 
 @event_listener("night_acted")
 def on_night_acted(evt, var, target, spy):
@@ -376,5 +354,3 @@ def on_revealroles(evt, var, wrapper):
 
     if ENTRANCED_DYING:
         evt.data["output"].append("\u0002dying entranced players\u0002: {0}".format(", ".join(p.nick for p in ENTRANCED_DYING)))
-
-# vim: set sw=4 expandtab:

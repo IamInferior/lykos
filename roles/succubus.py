@@ -43,21 +43,23 @@ def hvisit(var, wrapper, message):
     PASSED.discard(wrapper.source)
     succ_num = len(get_all_players(("succubus",)))
 
-    if target not in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num:
+    succ_capped = ENTRANCED_ALIVE_NUM >= succ_num * 2
+
+    if target not in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num * 2:
         ENTRANCED.add(target)
         wrapper.send(messages["succubus_target_success"].format(target))
     else:
         wrapper.send(messages["harlot_success"].format(target))
 
     if wrapper.source is not target:
-        if target not in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num:
+        if target not in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num * 2:
             target.send(messages["notify_succubus_target"].format(wrapper.source))
             ENTRANCED_ALIVE_NUM = ENTRANCED_ALIVE_NUM + 1
         else:
             target.send(messages["harlot_success"].format(wrapper.source))
 
         revt = Event("succubus_visit", {})
-        if ENTRANCED_ALIVE_NUM > succ_num:
+        if succ_capped:
             revt = Event("harlot_visit", {})
 
         revt.dispatch(var, wrapper.source, target)
@@ -66,10 +68,6 @@ def hvisit(var, wrapper, message):
         if users._get(var.TARGETED.get(target.nick), allow_none=True) in get_all_players(("succubus",)): # FIXME
             msg = messages["no_target_succubus"].format(var.TARGETED[target.nick])
             del var.TARGETED[target.nick]
-            if target in get_all_players(("village drunk",)):
-                victim = random.choice(list(get_all_players() - get_all_players(("succubus",)) - {target}))
-                msg += messages["drunk_target"].format(victim)
-                var.TARGETED[target.nick] = victim.nick
             target.send(msg)
 
         if target.nick in var.HEXED and users._get(var.LASTHEXED[target.nick]) in get_all_players(("succubus",)): # FIXME
@@ -96,7 +94,7 @@ def pass_cmd(var, wrapper, message):
 
 @event_listener("harlot_visit")
 def on_harlot_visit(evt, var, harlot, victim):
-    if victim in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num:
+    if victim in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num * 2:
         harlot.send(messages["notify_succubus_target"].format(victim))
         victim.send(messages["succubus_harlot_success"].format(harlot))
         ENTRANCED.add(harlot)
@@ -163,10 +161,13 @@ def on_player_win(evt, var, user, role, winner, survived):
         evt.data["special"].append("entranced")
         if winner != "succubi":
             evt.data["won"] = False
+            evt.data["iwon"] = False
         else:
-            evt.data["iwon"] = True
+            evt.data["won"] = True
+            evt.data["iwon"] = survived
     if role == "succubus" and winner == "succubi":
         evt.data["won"] = True
+        evt.data["iwon"] = True
 
 @event_listener("chk_win", priority=2)
 def on_chk_win(evt, var, rolemap, mainroles, lpl, lwolves, lrealwolves):
@@ -185,6 +186,7 @@ def on_can_exchange(evt, var, actor, target):
 @event_listener("del_player")
 def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
     global ALL_SUCC_IDLE
+    global ENTRANCED_ALIVE_NUM
 
     entranced_alive = ENTRANCED.difference(evt.params.deadlist).intersection(evt.data["pl"])
     ENTRANCED_ALIVE_NUM = len(entranced_alive)
