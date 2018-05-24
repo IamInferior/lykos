@@ -155,6 +155,6 @@ def on_reset(evt, var):
 def on_get_role_metadata(evt, var, kind):
     if kind == "night_kills":
         hunters = (var.ROLES["vigilante"] - HUNTERS) | set(KILLS.keys())
-        evt.data["vigilante"] = len(vigilantes)
+        evt.data["vigilante"] = len(hunters)
 
 # vim: set sw=4 expandtab:
