@@ -13,6 +13,8 @@ from src.decorators import command, event_listener
 from src.messages import messages
 from src.events import Event
 
+from src.roles import harlot
+
 ENTRANCED = set() # type: Set[users.User]
 ENTRANCED_DYING = set() # type: Set[users.User]
 VISITED = {} # type: Dict[users.User, users.User]
@@ -22,6 +24,7 @@ ENTRANCED_ALIVE_NUM = 0
 
 @command("visit", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("succubus",))
 def hvisit(var, wrapper, message):
+
     global ENTRANCED_ALIVE_NUM
     """Entrance a player, converting them to your team."""
     if VISITED.get(wrapper.source):
@@ -44,6 +47,14 @@ def hvisit(var, wrapper, message):
     succ_num = len(get_all_players(("succubus",)))
 
     succ_capped = ENTRANCED_ALIVE_NUM >= succ_num * 2
+
+    if target in get_all_players(("succubus",)) or target in get_all_players(("harlot",)):
+        if VISITED.get(target):
+            wrapper.send(messages["succubus_notathome"].format(VISITED[wrapper.source]))
+            return
+        if harlot.VISITED.get(target):
+            wrapper.send(messages["succubus_notathome"].format(VISITED[wrapper.source]))
+            return
 
     if target not in get_all_players(("succubus",)) and ENTRANCED_ALIVE_NUM < succ_num * 2:
         ENTRANCED.add(target)

@@ -37,6 +37,14 @@ def hvisit(var, wrapper, message):
     VISITED[wrapper.source] = target
     PASSED.discard(wrapper.source)
 
+    if target in get_all_players(("succubus",)) or target in get_all_players(("harlot",)):
+        if VISITED.get(target):
+            wrapper.send(messages["succubus_notathome"].format(VISITED[wrapper.source]))
+            return
+        if harlot.VISITED.get(target):
+            wrapper.send(messages["succubus_notathome"].format(VISITED[wrapper.source]))
+            return
+
     wrapper.pm(messages["harlot_success"].format(target))
     if target is not wrapper.source:
         target.send(messages["harlot_success"].format(wrapper.source))

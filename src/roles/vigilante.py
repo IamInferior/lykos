@@ -11,11 +11,15 @@ from src.messages import messages
 from src.events import Event
 
 KILLS = {} # type: Dict[users.User, users.User]
+HUNTERS = set()
 PASSED = set() # type: Set[users.User]
 
 @command("kill", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("vigilante",))
 def vigilante_kill(var, wrapper, message):
     """Kill someone at night, but you die too if they aren't a wolf, jester, or win stealer!"""
+    if wrapper.source in HUNTERS and wrapper.source not in KILLS:
+        wrapper.pm(messages["hunter_already_killed"])
+        return
 
     target = get_target(var, wrapper, re.split(" +", message)[0], not_self_message="no_suicide")
 
@@ -27,6 +31,7 @@ def vigilante_kill(var, wrapper, message):
     target = evt.data["target"]
 
     KILLS[wrapper.source] = target
+    HUNTERS.add(wrapper.source)
     PASSED.discard(wrapper.source)
 
     wrapper.send(messages["player_kill"].format(orig))
@@ -40,6 +45,7 @@ def vigilante_retract(var, wrapper, message):
         return
 
     KILLS.pop(wrapper.source, None)
+    HUNTERS.discard(wrapper.source)
     PASSED.discard(wrapper.source)
     wrapper.send(messages["retracted_kill"])
 
@@ -48,6 +54,7 @@ def vigilante_pass(var, wrapper, message):
     """Do not kill anyone tonight as a vigilante."""
     KILLS.pop(wrapper.source, None)
     PASSED.add(wrapper.source)
+    HUNTERS.discard(wrapper.source)
     wrapper.send(messages["hunter_pass"])
 
     debuglog("{0} (vigilante) PASS".format(wrapper.source))
@@ -55,9 +62,11 @@ def vigilante_pass(var, wrapper, message):
 @event_listener("del_player")
 def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
     PASSED.discard(user)
+    HUNTERS.discard(user)
     KILLS.pop(user, None)
     for vigilante, target in list(KILLS.items()):
         if target is user:
+            HUNTERS.discard(h)
             vigilante.send(messages["hunter_discard"])
             del KILLS[vigilante]
 
@@ -68,7 +77,9 @@ def on_swap(evt, var, old_user, user):
             KILLS[user] = KILLS.pop(vigilante)
         if target is old_user:
             KILLS[vigilante] = user
-
+    if old_user in HUNTERS:
+        HUNTERS.discard(old_user)
+        HUNTERS.add(user)
     if old_user in PASSED:
         PASSED.remove(old_user)
         PASSED.add(user)
@@ -98,6 +109,8 @@ def on_transition_day(evt, var):
 def on_exchange(evt, var, actor, target, actor_role, target_role):
     KILLS.pop(actor, None)
     KILLS.pop(target, None)
+    HUNTERS.discard(actor)
+    HUNTERS.discard(target)
     PASSED.discard(actor)
     PASSED.discard(target)
 
@@ -110,6 +123,8 @@ def on_chk_nightdone(evt, var):
 def on_transition_night_end(evt, var):
     ps = get_players()
     for vigilante in get_all_players(("vigilante",)):
+        if vigilante in HUNTERS:
+            continue # already killed
         pl = ps[:]
         random.shuffle(pl)
         pl.remove(vigilante)
@@ -122,6 +137,7 @@ def on_transition_night_end(evt, var):
 def on_succubus_visit(evt, var, succubus, target):
     if target in KILLS and KILLS[target] in get_all_players(("succubus",)):
         target.send(messages["no_kill_succubus"].format(KILLS[target]))
+        HUNTERS.discard(target)
         del KILLS[target]
 
 @event_listener("begin_day")
@@ -133,10 +149,12 @@ def on_begin_day(evt, var):
 def on_reset(evt, var):
     KILLS.clear()
     PASSED.clear()
+    HUNTERS.clear()
 
 @event_listener("get_role_metadata")
 def on_get_role_metadata(evt, var, kind):
     if kind == "night_kills":
-        evt.data["vigilante"] = len(var.ROLES["vigilante"])
+        hunters = (var.ROLES["vigilante"] - HUNTERS) | set(KILLS.keys())
+        evt.data["vigilante"] = len(hunters)
 
 # vim: set sw=4 expandtab:
