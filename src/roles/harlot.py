@@ -12,6 +12,7 @@ from src.functions import get_players, get_all_players, get_main_role, get_revea
 from src.decorators import command, event_listener
 from src.messages import messages
 from src.events import Event
+from src.roles import succubus
 
 VISITED = {} # type: Dict[users.User, users.User]
 PASSED = set() # type: Set[users.User]
@@ -41,7 +42,7 @@ def hvisit(var, wrapper, message):
         if VISITED.get(target):
             wrapper.send(messages["succubus_notathome"].format(VISITED[wrapper.source]))
             return
-        if harlot.VISITED.get(target):
+        if succubus.VISITED.get(target):
             wrapper.send(messages["succubus_notathome"].format(VISITED[wrapper.source]))
             return
 
