@@ -2,6 +2,7 @@
 
 from src.gamemodes import (GameMode, game_mode, reset_roles)
 import src.settings as var
+import random
 from src.utilities import *
 from src.messages import messages
 from src import events
@@ -103,11 +104,12 @@ class PpdMode(GameMode):
               "gunner"          : (   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   )
               })
 
-@game_mode("edgy", minp = 4, maxp = 20, likelihood = 3)
+@game_mode("edgy", minp = 4, maxp = 20, likelihood = 1)
 class EdgyMode(GameMode):
     """pssh nothing personnel kid"""
     def __init__(self, arg=""):
         super().__init__(arg)
+        events.add_listener("transition_day_resolve", self.on_transition_day_resolve_end)
         self.ABSTAIN_ENABLED = False
         self.SHARPSHOOTER_CHANCE = 1
         self.ROLE_INDEX =         (   4   ,   6   ,   7   ,   8   ,   9   ,  10   ,  11   ,  12   ,  14   ,  16   ,  18   )
@@ -119,35 +121,48 @@ class EdgyMode(GameMode):
               "vigilante"       : (   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
               "oracle"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ),
               # wolf roles
-              "fallen angel"    : (   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   ,   2   ),
+              "fallen angel"    : (   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   ,   3   ),
               "traitor"         : (   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   2   ,   2   ,   2   ),
               "werecrow"        : (   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
               # neutral roles
               "demoniac"        : (   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
               "turncoat"        : (   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
               "crazed shaman"   : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ),
-              "vengeful ghost"  : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ),
+              "vengeful ghost"  : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ),
               # templates
               "cursed villager" : (   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
-              "gunner"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ),
-              "sharpshooter"    : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ),
+              "gunner"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ),
+              "sharpshooter"    : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ),
               "assassin"        : (   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   )
               })
-    @event_listener("transition_day", priority=9)
-    def on_transition_day(evt, var):
-        evt.data["message"].append(random.choice("\npssh nothing personnel kid\n", 
+
+    def on_transition_day_resolve_end(self, evt, var, victims):
+        evt.data["message"].append(random.choice(["\npssh nothing personnel kid\n", 
           "\ni'll stop wearing black when they invent a darker color MOM",
           "\nthe devil whispered to me you'll never wtihstand the storm\n\nBUT I AM THE STORM\n",
           "\nMy name is not important. What is important is what I'm going to do... I just fuckin' hate this world\n",
           "\ni can be yuor angel or yur demon\n",
           "\ni have two sides nicest guy you'll ever meet and TWISTED FUCKING PSYCHOPATH\n",
-          "\nim a fucking dark triad man\n",
+          "\nim a fucking dark triad man don't mess with me\n",
           "\nYou laugh at me because I'm different, I laugh at you because you're all the same.\n",
           "\nI didn't ask to be born...but now I'm asking to die\n",
           "\nits hard to answer teh question whats wrong when nothing is right. my silents is words for my pain.\n",
           "\nTO BE FAIR YOU HAVE TO HAVE\n",
           "\ntown is full of fucking sheeple and i am the wolf come to make my harvest\n",
-          "\nmY hEaD iS a DaRk PlAcE\n"))
+          "\nCan't save you all. Don't want to.\n",
+          "\neverybody either loves you or hates you\n",
+          "\ndon't get confused between my personality and my attitude. my personality is who i am, my attitude depends on who you are\n",
+          "\nhope springs eternal but only fools drink from it.\n",
+          "\nPitter, patter, the rain starts to drop. While the water may fill up the hole on the road, it will never fill up the hole of one's heart.\n",
+          "\nMy name is Uchiha Sasuke, there are lot's of things I dislike and I don't really like anything.\n",
+          "\nit wasn't me who was wrong. it was the world.\n",
+          "\nyou laugh at me because i'm different. i laugh cos ur all the same\n",
+          "\njust stay out of my way. i'll do this alone if I have to.\n",
+          "\nthe werewolves arent the real monster here\n",
+          "\nthis is my curse... i am the death come for you\n",
+          "\nlmao friends you think friends wont betray you for a quick buck and fuck sonaive\n",
+          "\ni'm not a pyschopath im a high functioning psychopath\n",
+          "\nmY hEaD iS a DaRk PlAcE\n"]))
 
 
 @game_mode("awesome", minp = 4, maxp = 21, likelihood = 0)
