@@ -10,7 +10,7 @@ from src import events
 # DO NOT EDIT ANYTHING ABOVE THIS LINE, ADD CUSTOM GAMEMODES BELOW #
 ####################################################################
 
-@game_mode("dubslav", minp = 4, maxp = 24, likelihood = 4)
+@game_mode("dubslav", minp = 4, maxp = 24, likelihood = 8)
 class dubslavMode(GameMode):
     def __init__(self, arg=""):
         super().__init__(arg)
@@ -102,6 +102,52 @@ class PpdMode(GameMode):
               "cursed villager" : (   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   ,   2   ),
               "gunner"          : (   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   )
               })
+
+@game_mode("edgy", minp = 4, maxp = 20, likelihood = 3)
+class EdgyMode(GameMode):
+    """pssh nothing personnel kid"""
+    def __init__(self, arg=""):
+        super().__init__(arg)
+        self.ABSTAIN_ENABLED = False
+        self.SHARPSHOOTER_CHANCE = 1
+        self.ROLE_INDEX =         (   4   ,   6   ,   7   ,   8   ,   9   ,  10   ,  11   ,  12   ,  14   ,  16   ,  18   )
+        self.ROLE_GUIDE = reset_roles(self.ROLE_INDEX)
+        self.ROLE_GUIDE.update({# village roles
+              "mad scientist"   : (   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "harlot"          : (   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "prophet"         : (   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "vigilante"       : (   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "oracle"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ),
+              # wolf roles
+              "fallen angel"    : (   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   ,   2   ),
+              "traitor"         : (   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   2   ,   2   ,   2   ),
+              "werecrow"        : (   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              # neutral roles
+              "demoniac"        : (   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "turncoat"        : (   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "crazed shaman"   : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "vengeful ghost"  : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ),
+              # templates
+              "cursed villager" : (   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ),
+              "gunner"          : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ),
+              "sharpshooter"    : (   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   0   ,   1   ,   1   ,   1   ,   1   ),
+              "assassin"        : (   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   )
+              })
+    @event_listener("transition_day", priority=9)
+    def on_transition_day(evt, var):
+        evt.data["message"].append(random.choice("\npssh nothing personnel kid\n", 
+          "\ni'll stop wearing black when they invent a darker color MOM",
+          "\nthe devil whispered to me you'll never wtihstand the storm\n\nBUT I AM THE STORM\n",
+          "\nMy name is not important. What is important is what I'm going to do... I just fuckin' hate this world\n",
+          "\ni can be yuor angel or yur demon\n",
+          "\ni have two sides nicest guy you'll ever meet and TWISTED FUCKING PSYCHOPATH\n",
+          "\nim a fucking dark triad man\n",
+          "\nYou laugh at me because I'm different, I laugh at you because you're all the same.\n",
+          "\nI didn't ask to be born...but now I'm asking to die\n",
+          "\nits hard to answer teh question whats wrong when nothing is right. my silents is words for my pain.\n",
+          "\nTO BE FAIR YOU HAVE TO HAVE\n",
+          "\ntown is full of fucking sheeple and i am the wolf come to make my harvest\n",
+          "\nmY hEaD iS a DaRk PlAcE\n"))
 
 
 @game_mode("awesome", minp = 4, maxp = 21, likelihood = 0)
