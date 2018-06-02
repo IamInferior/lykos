@@ -109,7 +109,7 @@ class EdgyMode(GameMode):
     """pssh nothing personnel kid"""
     def __init__(self, arg=""):
         super().__init__(arg)
-        events.add_listener("transition_day_resolve", self.on_transition_day_resolve_end)
+        
         self.ABSTAIN_ENABLED = False
         self.SHARPSHOOTER_CHANCE = 1
         self.ROLE_INDEX =         (   4   ,   6   ,   7   ,   8   ,   9   ,  10   ,  11   ,  12   ,  14   ,  16   ,  18   )
@@ -136,7 +136,13 @@ class EdgyMode(GameMode):
               "assassin"        : (   0   ,   0   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   1   ,   2   )
               })
 
-    def on_transition_day_resolve_end(self, evt, var, victims):
+    def startup(self):
+        events.add_listener("transition_day_resolve", self.edgyday)
+
+    def teardown(self):
+        events.remove_listener("transition_day_resolve", self.edgyday)
+
+    def edgyday(self, evt, var, victims):
         evt.data["message"].append(random.choice(["\npssh nothing personnel kid\n", 
           "\ni'll stop wearing black when they invent a darker color MOM",
           "\nthe devil whispered to me you'll never wtihstand the storm\n\nBUT I AM THE STORM\n",
