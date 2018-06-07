@@ -1,9 +1,7 @@
 import fnmatch
 import re
 import threading
-from collections import defaultdict, OrderedDict
-
-import botconfig
+from collections import OrderedDict
 
 LANGUAGE = 'en'
 
@@ -289,6 +287,7 @@ ROLE_GUIDE = OrderedDict([ # This is order-sensitive - many parts of the code re
              ("wild child"       , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
              ("vengeful ghost"   , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
              ("succubus"         , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
+             ("enchantress"      , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
              ("demoniac"         , (  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  )),
              # templates
              ("cursed villager"  , (  0  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  1  ,  2  ,  2  ,  2  ,  2  )),
@@ -324,9 +323,6 @@ HIDDEN_ROLES = frozenset({"vengeful ghost", "amnesiac"})
 WIN_STEALER_ROLES = frozenset({"monster", "succubus", "demoniac", "piper", "fool"})
 # These roles are valid kills for the vigilante as well
 VIG_CAN_KILL_ROLES = frozenset({"jester"})
-
-# these totems are beneficial for the *receiving* person, but can be detrimental to someone else acting on the receiver!
-BENEFICIAL_TOTEMS = frozenset({"protection", "revealing", "desperation", "influence", "luck", "pestilence", "retribution"})
 
 # The roles in here are considered templates and will be applied on TOP of other roles. The restrictions are a list of roles that they CANNOT be applied to
 # NB: if you want a template to apply to everyone, list it here but make the restrictions an empty set. Templates not listed here are considered full roles instead

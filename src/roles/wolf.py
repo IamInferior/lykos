@@ -7,6 +7,7 @@ from src.utilities import *
 from src.functions import get_players, get_all_players, get_main_role, get_all_roles
 from src import debuglog, errlog, plog, users, channels
 from src.decorators import cmd, event_listener
+from src.containers import UserList, UserSet, UserDict, DefaultUserDict
 from src.messages import messages
 from src.events import Event
 
@@ -61,7 +62,7 @@ def wolf_kill(cli, nick, chan, rest):
         victim = get_victim(cli, nick, victim, False)
         if not victim:
             return
-        
+
         if victim == nick:
             pm(cli, nick, messages["no_suicide"])
             return
@@ -73,7 +74,7 @@ def wolf_kill(cli, nick, chan, rest):
         target = users._get(victim) # FIXME
 
         evt = Event("targeted_command", {"target": target, "misdirection": True, "exchange": True})
-        evt.dispatch(var, "kill", wolf, target, frozenset({"detrimental"}))
+        evt.dispatch(var, wolf, target)
         if evt.prevent_default:
             return
         victim = evt.data["target"].nick
@@ -127,7 +128,7 @@ def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
             del KILLS[a]
 
 @event_listener("rename_player")
-def on_rename(evt, cli, var, prefix, nick):
+def on_rename(evt, var, prefix, nick):
     kvp = []
     for a,b in KILLS.items():
         nl = []
@@ -149,7 +150,7 @@ def on_acted(evt, var, user, actor):
 
 @event_listener("get_special")
 def on_get_special(evt, var):
-    evt.data["special"].update(get_players(CAN_KILL))
+    evt.data["wolves"].update(get_players(var.WOLFTEAM_ROLES))
 
 @event_listener("transition_day", priority=1)
 def on_transition_day(evt, var):
@@ -262,7 +263,7 @@ def on_exchange(evt, var, actor, target, actor_role, target_role):
         if notify:
             player.send_messages()
 
-        evt.data["actor_messages"].append("Players: " + ", ".join(to_send))
+        evt.data["actor_messages"].append(messages["players_list"].format(", ".join(to_send)))
         if target_role in CAN_KILL and var.DISEASED_WOLVES:
             evt.data["actor_messages"].append(messages["ill_wolves"])
         if var.ALPHA_ENABLED and target_role == "alpha wolf" and actor.nick not in var.ALPHA_WOLVES:
@@ -295,7 +296,7 @@ def on_exchange(evt, var, actor, target, actor_role, target_role):
         if notify:
             player.send_messages()
 
-        evt.data["target_messages"].append("Players: " + ", ".join(to_send))
+        evt.data["target_messages"].append(messages["players_list"].format(", ".join(to_send)))
         if actor_role in CAN_KILL and var.DISEASED_WOLVES:
             evt.data["target_messages"].append(messages["ill_wolves"])
         if var.ALPHA_ENABLED and actor_role == "alpha wolf" and target.nick not in var.ALPHA_WOLVES:
@@ -397,6 +398,12 @@ def on_transition_night_end(evt, var):
                 an = "n"
             wolf.send(messages["wolf_simple"].format(an, tags, role))  # !simple
 
+
+        if var.FIRST_NIGHT:
+            minions = len(get_all_players(("minion",)))
+            if minions > 0:
+                wolf.send(messages["has_minions"].format(minions, plural("minion", minions)))
+
         pl = ps[:]
         random.shuffle(pl)
         pl.remove(wolf)  # remove self from list
@@ -423,22 +430,12 @@ def on_transition_night_end(evt, var):
                 else:
                     players.append(player.nick)
 
-        wolf.send("Players: " + ", ".join(players))
+        wolf.send(messages["players_list"].format(", ".join(players)))
         if role in CAN_KILL and var.DISEASED_WOLVES:
             wolf.send(messages["ill_wolves"])
         # TODO: split the following out into their own files (alpha)
         if var.ALPHA_ENABLED and role == "alpha wolf" and wolf.nick not in var.ALPHA_WOLVES: # FIXME: Fix once var.ALPHA_WOLVES holds User instances
             wolf.send(messages["wolf_bite"])
-
-@event_listener("succubus_visit")
-def on_succubus_visit(evt, var, succubus, target):
-    if get_all_players(("succubus",)).intersection(users._get(x) for x in KILLS.get(target.nick, ())): # FIXME: once KILLS holds User instances
-        for s in get_all_players(("succubus",)):
-            if s.nick in KILLS[target.nick]:
-                target.send(messages["no_kill_succubus"].format(succubus))
-                KILLS[target.nick].remove(s.nick)
-        if not KILLS[target.nick]:
-            del KILLS[target.nick]
 
 @event_listener("begin_day")
 def on_begin_day(evt, var):

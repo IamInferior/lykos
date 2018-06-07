@@ -5,17 +5,16 @@ import math
 from collections import defaultdict
 
 import botconfig
-import src.settings as var
 from src.utilities import *
 from src import channels, users, debuglog, errlog, plog
 from src.functions import get_players, get_all_players, get_main_role, get_reveal_role, get_target
 from src.decorators import command, event_listener
+from src.containers import UserList, UserSet, UserDict, DefaultUserDict
 from src.messages import messages
 from src.events import Event
-from src.roles import succubus
 
-VISITED = {} # type: Dict[users.User, users.User]
-PASSED = set() # type: Set[users.User]
+VISITED = UserDict() # type: Dict[users.User, users.User]
+PASSED = UserSet() # type: Set[users.User]
 
 @command("visit", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("harlot",))
 def hvisit(var, wrapper, message):
@@ -29,7 +28,7 @@ def hvisit(var, wrapper, message):
         return
 
     evt = Event("targeted_command", {"target": target, "misdirection": True, "exchange": True})
-    evt.dispatch(var, "visit", wrapper.source, target, frozenset({"immediate"}))
+    evt.dispatch(var, wrapper.source, target)
     if evt.prevent_default:
         return
     target = evt.data["target"]
@@ -37,14 +36,6 @@ def hvisit(var, wrapper, message):
 
     VISITED[wrapper.source] = target
     PASSED.discard(wrapper.source)
-
-    if target in get_all_players(("succubus",)) or target in get_all_players(("harlot",)):
-        if VISITED.get(target):
-            wrapper.send(messages["succubus_notathome"].format(VISITED[wrapper.source]))
-            return
-        if succubus.VISITED.get(target):
-            wrapper.send(messages["succubus_notathome"].format(VISITED[wrapper.source]))
-            return
 
     wrapper.pm(messages["harlot_success"].format(target))
     if target is not wrapper.source:
@@ -136,34 +127,22 @@ def on_transition_night_end(evt, var):
         to_send = "harlot_info"
         if harlot.prefers_simple():
             to_send = "harlot_simple"
-        harlot.send(messages[to_send], "Players: " + ", ".join(p.nick for p in pl), sep="\n")
+        harlot.send(messages[to_send], messages["players_list"].format(", ".join(p.nick for p in pl)), sep="\n")
 
 @event_listener("begin_day")
 def on_begin_day(evt, var):
     VISITED.clear()
     PASSED.clear()
 
-@event_listener("swap_player")
-def on_swap(evt, var, old_user, user):
-    for harlot, target in set(VISITED.items()):
-        if target is old_user:
-            VISITED[harlot] = user
-        if harlot is old_user:
-            VISITED[user] = VISITED.pop(harlot)
-
-    if old_user in PASSED:
-        PASSED.remove(old_user)
-        PASSED.add(user)
-
 @event_listener("get_special")
 def on_get_special(evt, var):
-    evt.data["special"].update(get_players(("harlot",)))
+    evt.data["villagers"].update(get_players(("harlot",)))
 
 @event_listener("del_player")
 def on_del_player(evt, var, user, mainrole, allroles, death_triggers):
     if "harlot" not in allroles:
         return
-    VISITED.pop(user, None)
+    del VISITED[:user:]
     PASSED.discard(user)
 
 @event_listener("reset")

@@ -15,23 +15,28 @@ from src.events import Event
 
 from src.roles._shaman_helper import setup_variables, get_totem_target, give_totem
 
-TOTEMS, LASTGIVEN, SHAMANS = setup_variables("shaman", knows_totem=True)
+TOTEMS, LASTGIVEN, SHAMANS = setup_variables("crazed shaman", knows_totem=False)
 
-@command("give", "totem", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("shaman",))
-def shaman_totem(var, wrapper, message):
-    """Give a totem to a player."""
+@command("give", "totem", chan=False, pm=True, playing=True, silenced=True, phases=("night",), roles=("crazed shaman",))
+def crazed_shaman_totem(var, wrapper, message):
+    """Give a random totem to a player."""
 
     target = get_totem_target(var, wrapper, message, LASTGIVEN)
     if not target:
         return
 
-    SHAMANS[wrapper.source] = give_totem(var, wrapper, target, prefix="You", role="shaman", msg=" of {0}".format(TOTEMS[wrapper.source]))
+    SHAMANS[wrapper.source] = give_totem(var, wrapper, target, prefix="You", role="crazed shaman", msg="")
+
+@event_listener("player_win")
+def on_player_win(evt, var, user, role, winner, survived):
+    if role == "crazed shaman" and survived and not winner.startswith("@") and singular(winner) not in var.WIN_STEALER_ROLES:
+        evt.data["iwon"] = True
 
 @event_listener("transition_day_begin", priority=4)
 def on_transition_day_begin(evt, var):
     # Select random totem recipients if shamans didn't act
     pl = get_players()
-    for shaman in get_players(("shaman",)):
+    for shaman in get_players(("crazed shaman",)):
         if shaman not in SHAMANS and shaman.nick not in var.SILENCED:
             ps = pl[:]
             if shaman in LASTGIVEN:
@@ -41,7 +46,7 @@ def on_transition_day_begin(evt, var):
                 target = random.choice(ps)
                 dispatcher = MessageDispatcher(shaman, shaman)
 
-                SHAMANS[shaman] = give_totem(var, dispatcher, target, prefix=messages["random_totem_prefix"], role="shaman", msg=" of {0}".format(TOTEMS[shaman]))
+                SHAMANS[shaman] = give_totem(var, dispatcher, target, prefix=messages["random_totem_prefix"], role="crazed shaman", msg="")
             else:
                 LASTGIVEN[shaman] = None
         elif shaman not in SHAMANS:
@@ -51,8 +56,8 @@ def on_transition_day_begin(evt, var):
 def on_transition_night_end(evt, var):
     max_totems = 0
     ps = get_players()
-    shamans = get_players(("shaman",))
-    index = var.TOTEM_ORDER.index("shaman")
+    shamans = get_players(("crazed shaman",))
+    index = var.TOTEM_ORDER.index("crazed shaman")
     for c in var.TOTEM_CHANCES.values():
         max_totems += c[index]
 
@@ -75,18 +80,13 @@ def on_transition_night_end(evt, var):
                 TOTEMS[shaman] = t
                 break
         if shaman.prefers_simple():
-            shaman.send(messages["shaman_simple"].format("shaman"))
-            shaman.send(messages["totem_simple"].format(TOTEMS[shaman]))
+            shaman.send(messages["shaman_simple"].format("crazed shaman"))
         else:
-            shaman.send(messages["shaman_notify"].format("shaman", ""))
-            totem = TOTEMS[shaman]
-            tmsg = messages["shaman_totem"].format(totem)
-            tmsg += messages[totem + "_totem"]
-            shaman.send(tmsg)
+            shaman.send(messages["shaman_notify"].format("crazed shaman", "random "))
         shaman.send(messages["players_list"].format(", ".join(p.nick for p in pl)))
 
 @event_listener("get_special")
 def on_get_special(evt, var):
-    evt.data["villagers"].update(get_players(("shaman",)))
+    evt.data["neutrals"].update(get_players(("crazed shaman",)))
 
 # vim: set sw=4 expandtab:

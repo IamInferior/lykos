@@ -10,6 +10,7 @@ from src.utilities import *
 from src import users, channels, debuglog, errlog, plog
 from src.functions import get_players, get_all_players
 from src.decorators import cmd, event_listener
+from src.containers import UserList, UserSet, UserDict, DefaultUserDict
 from src.messages import messages
 from src.events import Event
 
@@ -40,7 +41,7 @@ def guard(cli, nick, chan, rest):
 
     # self-guard ignores luck/misdirection/exchange totem
     evt = Event("targeted_command", {"target": target, "misdirection": (angel is not target), "exchange": (angel is not target)})
-    if not evt.dispatch(var, "guard", angel, target, frozenset({"beneficial"})):
+    if not evt.dispatch(var, angel, target):
         return
     victim = evt.data["target"].nick
     GUARDED[nick] = victim
@@ -63,7 +64,7 @@ def pass_cmd(cli, nick, chan, rest):
     debuglog("{0} ({1}) PASS".format(nick, get_role(nick)))
 
 @event_listener("rename_player")
-def on_rename(evt, cli, var, prefix, nick):
+def on_rename(evt, var, prefix, nick):
     for dictvar in (GUARDED, LASTGUARDED):
         kvp = {}
         for a,b in dictvar.items():
@@ -98,7 +99,7 @@ def on_acted(evt, var, user, actor):
 
 @event_listener("get_special")
 def on_get_special(evt, var):
-    evt.data["special"].update(get_players(("guardian angel", "bodyguard")))
+    evt.data["villagers"].update(get_players(("guardian angel", "bodyguard")))
 
 @event_listener("exchange_roles")
 def on_exchange(evt, var, actor, target, actor_role, target_role):
@@ -223,7 +224,7 @@ def on_transition_day_resolve_end(evt, var, victims):
                 evt.data["dead"].append(gangel)
 
 @event_listener("transition_night_begin")
-def on_transition_night_begin(evt, cli, var):
+def on_transition_night_begin(evt, var):
     # needs to be here in order to allow bodyguard protections to work during the daytime
     # (right now they don't due to other reasons, but that may change)
     GUARDED.clear()
@@ -244,7 +245,7 @@ def on_transition_night_end(evt, var):
         to_send = "bodyguard_notify"
         if bg.prefers_simple():
             to_send = "bodyguard_simple"
-        bg.send(messages[to_send].format(warning), "Players: " + ", ".join(p.nick for p in pl), sep="\n")
+        bg.send(messages[to_send].format(warning), messages["players_list"].format(", ".join(p.nick for p in pl), sep="\n"))
 
     for gangel in get_all_players(("guardian angel",)):
         pl = ps[:]
@@ -265,7 +266,7 @@ def on_transition_night_end(evt, var):
         to_send = "guardian_notify"
         if gangel.prefers_simple():
             to_send = "guardian_simple"
-        gangel.send(messages[to_send].format(warning, gself), "Players: " + ", ".join(p.nick for p in pl), sep="\n")
+        gangel.send(messages[to_send].format(warning, gself), messages["players_list"].format(", ".join(p.nick for p in pl)), sep="\n")
 
 @event_listener("assassinate")
 def on_assassinate(evt, var, killer, target, prot):
