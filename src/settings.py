@@ -311,7 +311,7 @@ TRUE_NEUTRAL_ROLES = frozenset({"crazed shaman", "fool", "jester", "monster", "c
 # These are the roles that will NOT be used for when amnesiac turns, everything else is fair game! (var.DEFAULT_ROLE is also added if not in this set)
 AMNESIAC_BLACKLIST = frozenset({"monster", "demoniac", "minion", "matchmaker", "clone", "doctor", "villager", "cultist", "piper", "dullahan", "wild child"})
 # These roles are seen as wolf by the seer/oracle
-SEEN_WOLF = WOLF_ROLES | {"monster", "mad scientist", "succubus"}
+SEEN_WOLF = WOLF_ROLES | {"monster", "mad scientist", "succubus", "enchantress"}
 # These are seen as the default role (or villager) when seen by seer (this overrides SEEN_WOLF)
 SEEN_DEFAULT = frozenset({"traitor", "hag", "sorcerer", "time lord", "villager", "cultist", "minion", "turncoat", "amnesiac",
                           "vengeful ghost", "lycan", "clone", "fool", "jester", "werekitten", "warlock", "piper", "demoniac"})
