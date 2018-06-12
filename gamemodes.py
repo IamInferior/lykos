@@ -138,9 +138,11 @@ class EdgyMode(GameMode):
 
     def startup(self):
         events.add_listener("transition_day_resolve", self.edgyday)
+        TEMPLATE_RESTRICTIONS["assassin"] += {"fallen angel"}
 
     def teardown(self):
         events.remove_listener("transition_day_resolve", self.edgyday)
+        TEMPLATE_RESTRICTIONS["assassin"] -= {"fallen angel"}
 
     def edgyday(self, evt, var, victims):
         evt.data["message"].append(random.choice(["\npssh nothing personnel kid\n", 
