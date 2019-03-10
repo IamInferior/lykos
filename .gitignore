@@ -12,8 +12,6 @@ __pycache__/
 .mypy_cache/
 
 # Config files
-botconfig.py
-/messages.json
 
 # Database files
 *.sqlite3
